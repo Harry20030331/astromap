@@ -6,7 +6,7 @@
 export function ChartWheel({ svg }: { svg: string }) {
   return (
     <div
-      className="chart-wheel mx-auto max-w-[min(100%,420px)] overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950 [&_svg]:h-auto [&_svg]:w-full"
+      className="chart-wheel mx-auto max-w-[min(100%,420px)] overflow-hidden rounded-lg border border-stone-200/90 bg-[var(--surface)] shadow-sm shadow-stone-100/50 [&_svg]:h-auto [&_svg]:w-full"
       dangerouslySetInnerHTML={{ __html: svg }}
     />
   );

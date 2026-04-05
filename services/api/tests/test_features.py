@@ -38,3 +38,12 @@ def test_features_shape_and_snapshot():
     assert len(features["aspects"]) > 0
     assert all(isinstance(x, str) for x in features["aspects"])
     assert len(features["dominant_planets"]) >= 1
+
+
+def test_extract_features_subset_changes_counts():
+    chart = compute_natal(FIXED_BIRTH)
+    only = frozenset({"Sun", "Moon", "Mercury"})
+    sub = extract_features(chart, included_points=only, aspect_orbs={})
+    assert sum(sub["elements"].values()) == 3
+    assert sum(sub["modalities"].values()) == 3
+    assert not any("Jupiter" in a for a in sub["aspects"])

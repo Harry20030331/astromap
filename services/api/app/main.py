@@ -9,13 +9,20 @@ import re
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+import httpx
+from fastapi import BackgroundTasks, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from app.astro.compute import BirthInput, compute_natal
-from app.astro.features import extract_features
-from app.config import CORS_ORIGINS, WHISPER_MAX_BYTES
+from app.astro.features import (
+    ALLOWED_ANALYSIS_POINTS,
+    DEFAULT_ASPECT_ORBS,
+    MAJOR_ASPECTS,
+    extract_features,
+)
+from app.config import CORS_ORIGINS, GEONAMES_USERNAME, WHISPER_MAX_BYTES
+from app.geo.geonames import MAX_QUERY_LEN, MIN_QUERY_LEN, search_cities, timezone_at_coords
 from app.llm import query as query_llm
 from app.llm import themes as themes_llm
 from app.llm import transcribe as transcribe_llm
@@ -45,6 +52,107 @@ class BirthCreate(BaseModel):
 
 class QueryBody(BaseModel):
     text: str = Field(..., min_length=1, max_length=4000)
+
+
+class ThemesPostBody(BaseModel):
+    """force=true re-runs the LLM even when themes are already stored."""
+
+    force: bool = False
+
+
+class AnalysisPreferencesBody(BaseModel):
+    """Which chart points drive the wheel, features, and LLM context."""
+
+    included_points: list[str] = Field(..., min_length=1)
+    aspect_orbs: dict[str, float] = Field(default_factory=dict)
+
+
+def _compute_effective_features(rec: dict[str, Any]) -> dict[str, Any]:
+    chart = rec.get("chart") or {}
+    prefs = rec.get("analysis_preferences")
+    if not prefs:
+        cached = rec.get("features")
+        if cached:
+            return cached
+        return extract_features(chart)
+    raw_inc = prefs.get("included_points") or []
+    if not raw_inc:
+        return rec.get("features") or extract_features(chart)
+    inc = frozenset(str(x) for x in raw_inc)
+    ao_raw = prefs.get("aspect_orbs") or {}
+    ao = {str(k): float(v) for k, v in ao_raw.items() if str(k) in MAJOR_ASPECTS}
+    merged_orbs = {**DEFAULT_ASPECT_ORBS, **ao}
+    return extract_features(chart, included_points=inc, aspect_orbs=merged_orbs)
+
+
+def _normalize_analysis_preferences(body: AnalysisPreferencesBody) -> dict[str, Any]:
+    inc = [str(x) for x in body.included_points]
+    if not inc:
+        raise HTTPException(status_code=400, detail="included_points must be non-empty")
+    seen: set[str] = set()
+    for n in inc:
+        if n not in ALLOWED_ANALYSIS_POINTS:
+            raise HTTPException(status_code=400, detail=f"unknown point: {n}")
+        seen.add(n)
+    unique_inc = sorted(seen)
+    merged_orbs = dict(DEFAULT_ASPECT_ORBS)
+    for k, v in body.aspect_orbs.items():
+        ks = str(k)
+        if ks not in MAJOR_ASPECTS:
+            raise HTTPException(status_code=400, detail=f"unknown aspect type: {k}")
+        fv = float(v)
+        if not (0.0 <= fv <= 15.0):
+            raise HTTPException(status_code=400, detail=f"orb for {ks} must be 0–15")
+        merged_orbs[ks] = fv
+    return {"included_points": unique_inc, "aspect_orbs": merged_orbs}
+
+
+def _themes_nonempty(themes: Any) -> bool:
+    if not themes or not isinstance(themes, dict):
+        return False
+    t = themes.get("themes")
+    return isinstance(t, list) and len(t) > 0
+
+
+def _themes_generating_response() -> dict[str, Any]:
+    return {
+        "generating": True,
+        "themes": [],
+        "suggested_reading_priorities": [],
+    }
+
+
+def _run_themes_job(session_id: str) -> None:
+    """Background: compute themes from features and persist (idempotent if already saved)."""
+    try:
+        rec = store.get_session(session_id)
+        if not rec:
+            return
+        if _themes_nonempty(rec.get("themes")):
+            rec["themes_status"] = "ready"
+            store.save_session(rec)
+            return
+        features = _compute_effective_features(rec)
+        themes_payload = themes_llm.generate_themes(features)
+    except Exception:
+        rec = store.get_session(session_id)
+        if rec:
+            rec["themes_status"] = "failed"
+            store.save_session(rec)
+        return
+
+    rec = store.get_session(session_id)
+    if not rec:
+        return
+    if _themes_nonempty(rec.get("themes")):
+        return
+    rec["themes"] = {
+        **themes_payload,
+        "generated_at": datetime.now(UTC).isoformat(),
+    }
+    rec["themes_status"] = "ready"
+    rec["features"] = features
+    store.save_session(rec)
 
 
 def _parse_birth(create: BirthCreate) -> BirthInput:
@@ -80,9 +188,71 @@ def _parse_birth(create: BirthCreate) -> BirthInput:
     )
 
 
+def _geonames_user() -> str:
+    if not GEONAMES_USERNAME:
+        raise HTTPException(
+            status_code=503,
+            detail="GeoNames is not configured. Set GEONAMES_USERNAME in the API environment.",
+        )
+    return GEONAMES_USERNAME
+
+
+def _validate_geo_query(q: str) -> str:
+    s = q.strip()
+    if len(s) < MIN_QUERY_LEN:
+        raise HTTPException(
+            status_code=400,
+            detail=f"q must be at least {MIN_QUERY_LEN} characters",
+        )
+    if len(s) > MAX_QUERY_LEN:
+        raise HTTPException(status_code=400, detail="q is too long")
+    if any(c in s for c in "\x00\n\r"):
+        raise HTTPException(status_code=400, detail="invalid q")
+    return s
+
+
+def _validate_country_code(country: str | None) -> str | None:
+    if country is None or country.strip() == "":
+        return None
+    c = country.strip().upper()
+    if len(c) != 2 or not c.isalpha():
+        raise HTTPException(status_code=400, detail="country must be a 2-letter ISO code")
+    return c
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/geo/cities")
+def geo_cities(q: str, country: str | None = None) -> dict[str, Any]:
+    """Search populated places (GeoNames). Requires GEONAMES_USERNAME."""
+    user = _geonames_user()
+    qv = _validate_geo_query(q)
+    cv = _validate_country_code(country)
+    try:
+        hits = search_cities(username=user, query=qv, country=cv)
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"GeoNames error: {e!s}") from e
+    return {"cities": hits}
+
+
+@app.get("/geo/timezone")
+def geo_timezone(lat: float, lng: float) -> dict[str, str]:
+    """IANA timezone for coordinates (GeoNames timezoneJSON)."""
+    user = _geonames_user()
+    if lat < -90 or lat > 90:
+        raise HTTPException(status_code=400, detail="lat out of range")
+    if lng < -180 or lng > 180:
+        raise HTTPException(status_code=400, detail="lng out of range")
+    try:
+        tz = timezone_at_coords(username=user, lat=lat, lng=lng)
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"GeoNames error: {e!s}") from e
+    except ValueError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
+    return {"tz_str": tz}
 
 
 @app.get("/sessions")
@@ -91,7 +261,7 @@ def list_sessions() -> dict[str, Any]:
 
 
 @app.post("/sessions")
-def create_session(body: BirthCreate) -> dict[str, Any]:
+def create_session(body: BirthCreate, background_tasks: BackgroundTasks) -> dict[str, Any]:
     birth_in = _parse_birth(body)
     chart = compute_natal(birth_in)
     features = extract_features(chart)
@@ -114,9 +284,11 @@ def create_session(body: BirthCreate) -> dict[str, Any]:
             "chart": chart,
             "features": features,
             "themes": None,
+            "themes_status": "generating",
             "queries": [],
         }
     )
+    background_tasks.add_task(_run_themes_job, record["id"])
     return {
         "session_id": record["id"],
         "birth": birth_record,
@@ -130,16 +302,70 @@ def get_session(session_id: str) -> dict[str, Any]:
     rec = store.get_session(session_id)
     if not rec:
         raise HTTPException(status_code=404, detail="session not found")
-    return rec
+    out = dict(rec)
+    out["features"] = _compute_effective_features(rec)
+    return out
 
 
-@app.post("/sessions/{session_id}/themes")
-def post_themes(session_id: str) -> dict[str, Any]:
+@app.patch("/sessions/{session_id}/analysis-preferences")
+def patch_analysis_preferences(
+    session_id: str,
+    body: AnalysisPreferencesBody,
+    background_tasks: BackgroundTasks,
+) -> dict[str, Any]:
     rec = store.get_session(session_id)
     if not rec:
         raise HTTPException(status_code=404, detail="session not found")
+    normalized = _normalize_analysis_preferences(body)
+    rec["analysis_preferences"] = normalized
+    chart = rec.get("chart") or {}
+    rec["features"] = extract_features(
+        chart,
+        included_points=frozenset(normalized["included_points"]),
+        aspect_orbs=normalized["aspect_orbs"],
+    )
+    rec["themes"] = None
+    rec["themes_status"] = "generating"
+    store.save_session(rec)
+    background_tasks.add_task(_run_themes_job, session_id)
+    return {
+        "analysis_preferences": normalized,
+        "features": rec["features"],
+        "themes_status": rec["themes_status"],
+    }
+
+
+@app.post("/sessions/{session_id}/themes")
+def post_themes(
+    session_id: str,
+    background_tasks: BackgroundTasks,
+    body: ThemesPostBody = ThemesPostBody(),
+) -> dict[str, Any]:
+    rec = store.get_session(session_id)
+    if not rec:
+        raise HTTPException(status_code=404, detail="session not found")
+
+    if not body.force and _themes_nonempty(rec.get("themes")):
+        return rec["themes"]
+
+    if not body.force and rec.get("themes_status") == "generating":
+        return _themes_generating_response()
+
+    if not body.force and rec.get("themes_status") == "failed":
+        rec["themes_status"] = "generating"
+        store.save_session(rec)
+        background_tasks.add_task(_run_themes_job, session_id)
+        return _themes_generating_response()
+
+    if not body.force and rec.get("themes_status") is None and not _themes_nonempty(rec.get("themes")):
+        rec["themes_status"] = "generating"
+        store.save_session(rec)
+        background_tasks.add_task(_run_themes_job, session_id)
+        return _themes_generating_response()
+
     try:
-        themes_payload = themes_llm.generate_themes(rec["features"])
+        eff = _compute_effective_features(rec)
+        themes_payload = themes_llm.generate_themes(eff)
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e)) from e
     except Exception as e:
@@ -149,6 +375,8 @@ def post_themes(session_id: str) -> dict[str, Any]:
         **themes_payload,
         "generated_at": datetime.now(UTC).isoformat(),
     }
+    rec["themes_status"] = "ready"
+    rec["features"] = eff
     store.save_session(rec)
     return rec["themes"]
 
@@ -180,7 +408,7 @@ def post_query(session_id: str, body: QueryBody) -> dict[str, Any]:
     rec = store.get_session(session_id)
     if not rec:
         raise HTTPException(status_code=404, detail="session not found")
-    features = rec.get("features") or {}
+    features = _compute_effective_features(rec)
     aspects_short = features.get("aspects") or []
     try:
         response = query_llm.run_query(features, body.text, aspects_short)

@@ -14,14 +14,16 @@ You output ONLY valid JSON with this shape:
 {
   "themes": [
     {
-      "title": "short theme label",
-      "hints": ["brief suggestive hint", "..."],
-      "reading_priority": "optional short note on what to explore first"
+      "title": "very short theme name (about 2–6 words)",
+      "description": "one brief sentence only (max ~140 characters); suggestive, not a conclusion",
+      "hints": [],
+      "reading_priority": ""
     }
   ],
-  "suggested_reading_priorities": ["optional overall priorities"]
+  "suggested_reading_priorities": []
 }
-Produce 3 to 5 themes. Hints must be concise and non-authoritative (suggest, do not conclude)."""
+Produce exactly 3 or 4 small themes. Each theme must have title + description; leave hints as [] and reading_priority as "".
+Leave suggested_reading_priorities as [] unless two crisp overall priorities are obvious."""
 
 
 def generate_themes(features: dict[str, Any]) -> dict[str, Any]:
