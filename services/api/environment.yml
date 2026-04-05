@@ -1,0 +1,11 @@
+# Conda env for the FastAPI service (local dev). Create with:
+#   cd services/api && conda env create -f environment.yml
+# Activate: conda activate astramap-api
+name: astramap-api
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+      - -r requirements.txt
