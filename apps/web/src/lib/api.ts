@@ -30,6 +30,11 @@ export async function apiPatch<T>(path: string, body?: unknown): Promise<T> {
   return r.json() as Promise<T>;
 }
 
+export async function apiDelete(path: string): Promise<void> {
+  const r = await fetch(`${API_URL}${path}`, { method: "DELETE" });
+  if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
+}
+
 /** Multipart POST (e.g. audio upload for Whisper). Do not set Content-Type; browser sets boundary. */
 export async function apiPostFormData<T>(path: string, formData: FormData): Promise<T> {
   const r = await fetch(`${API_URL}${path}`, {

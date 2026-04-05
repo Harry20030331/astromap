@@ -1,8 +1,8 @@
 /**
  * Chart analysis preferences (must stay aligned with API `analysis_preferences`).
  *
- * **App defaults** (new sessions / Reset): ten planets + true nodes + four angles, each major
- * aspect orb 6°. Mirrors `DEFAULT_ASPECT_ORBS` in `services/api/app/astro/features.py`.
+ * **App defaults** (new sessions / Reset): ten planets only; major aspect orbs as in
+ * `services/api/app/astro/features.py` `DEFAULT_ASPECT_ORBS`.
  */
 
 export type AspectOrbKey =
@@ -48,20 +48,14 @@ export const DEFAULT_INCLUDED_POINTS: readonly string[] = [
   "Uranus",
   "Neptune",
   "Pluto",
-  "True_North_Lunar_Node",
-  "True_South_Lunar_Node",
-  "Ascendant",
-  "Descendant",
-  "Medium_Coeli",
-  "Imum_Coeli",
 ];
 
 export const DEFAULT_ASPECT_ORBS: Record<AspectOrbKey, number> = {
-  conjunction: 6,
-  sextile: 6,
-  square: 6,
-  trine: 6,
-  opposition: 6,
+  conjunction: 8,
+  sextile: 3,
+  square: 5,
+  trine: 3,
+  opposition: 5,
 };
 
 /** Single object for resets and docs; `included_points` must still be filtered by chart availability. */

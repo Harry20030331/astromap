@@ -5,12 +5,14 @@ Chart facts always come from the astro pipeline; LLMs only see precomputed JSON.
 """
 from __future__ import annotations
 
+import json
 import re
 from datetime import UTC, datetime
 from typing import Any
 
 import httpx
 from fastapi import BackgroundTasks, FastAPI, File, HTTPException, UploadFile
+from fastapi.responses import Response, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -18,6 +20,7 @@ from app.astro.compute import BirthInput, compute_natal
 from app.astro.features import (
     ALLOWED_ANALYSIS_POINTS,
     DEFAULT_ASPECT_ORBS,
+    DEFAULT_INCLUDED_POINTS,
     MAJOR_ASPECTS,
     extract_features,
 )
@@ -52,12 +55,20 @@ class BirthCreate(BaseModel):
 
 class QueryBody(BaseModel):
     text: str = Field(..., min_length=1, max_length=4000)
+    locale: str | None = Field(
+        default=None,
+        description="UI language: 'en' or 'zh'; steers LLM reply language",
+    )
 
 
 class ThemesPostBody(BaseModel):
     """force=true re-runs the LLM even when themes are already stored."""
 
     force: bool = False
+
+
+class StructureBody(BaseModel):
+    structure: str = Field(..., min_length=1, max_length=500)
 
 
 class AnalysisPreferencesBody(BaseModel):
@@ -264,7 +275,15 @@ def list_sessions() -> dict[str, Any]:
 def create_session(body: BirthCreate, background_tasks: BackgroundTasks) -> dict[str, Any]:
     birth_in = _parse_birth(body)
     chart = compute_natal(birth_in)
-    features = extract_features(chart)
+    features = extract_features(
+        chart,
+        included_points=DEFAULT_INCLUDED_POINTS,
+        aspect_orbs=DEFAULT_ASPECT_ORBS,
+    )
+    default_prefs = {
+        "included_points": sorted(DEFAULT_INCLUDED_POINTS),
+        "aspect_orbs": dict(DEFAULT_ASPECT_ORBS),
+    }
 
     birth_record = {
         "label": body.label,
@@ -283,6 +302,7 @@ def create_session(body: BirthCreate, background_tasks: BackgroundTasks) -> dict
             "birth": birth_record,
             "chart": chart,
             "features": features,
+            "analysis_preferences": default_prefs,
             "themes": None,
             "themes_status": "generating",
             "queries": [],
@@ -305,6 +325,13 @@ def get_session(session_id: str) -> dict[str, Any]:
     out = dict(rec)
     out["features"] = _compute_effective_features(rec)
     return out
+
+
+@app.delete("/sessions/{session_id}", status_code=204)
+def delete_session(session_id: str) -> Response:
+    if not store.delete_session(session_id):
+        raise HTTPException(status_code=404, detail="session not found")
+    return Response(status_code=204)
 
 
 @app.patch("/sessions/{session_id}/analysis-preferences")
@@ -411,7 +438,9 @@ def post_query(session_id: str, body: QueryBody) -> dict[str, Any]:
     features = _compute_effective_features(rec)
     aspects_short = features.get("aspects") or []
     try:
-        response = query_llm.run_query(features, body.text, aspects_short)
+        response = query_llm.run_query(
+            features, body.text, aspects_short, locale=body.locale
+        )
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e)) from e
     except Exception as e:
@@ -425,3 +454,84 @@ def post_query(session_id: str, body: QueryBody) -> dict[str, Any]:
     rec.setdefault("queries", []).append(entry)
     store.save_session(rec)
     return response
+
+
+@app.post("/sessions/{session_id}/query/stream")
+def post_query_stream(session_id: str, body: QueryBody) -> StreamingResponse:
+    """Same inputs as /query; streams markdown chunks via SSE, then saves parsed result."""
+    rec = store.get_session(session_id)
+    if not rec:
+        raise HTTPException(status_code=404, detail="session not found")
+    features = _compute_effective_features(rec)
+    aspects_short = features.get("aspects") or []
+
+    def event_generator():
+        pieces: list[str] = []
+        try:
+            for token in query_llm.run_query_stream(
+                features, body.text, aspects_short, locale=body.locale
+            ):
+                pieces.append(token)
+                yield f"data: {json.dumps({'type': 'delta', 'content': token})}\n\n"
+            md = "".join(pieces)
+            response = query_llm.parse_query_markdown(md)
+            entry = {
+                "text": body.text,
+                "response": response,
+                "ts": datetime.now(UTC).isoformat(),
+            }
+            rec.setdefault("queries", []).append(entry)
+            # Persist per-structure interpretations so the frontend can read them back
+            if response.get("structure_details"):
+                rec.setdefault("structure_interpretations", {}).update(response["structure_details"])
+            store.save_session(rec)
+            yield f"data: {json.dumps({'type': 'complete', 'response': response})}\n\n"
+        except RuntimeError as e:
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'message': f'LLM error: {e!s}'})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.post("/sessions/{session_id}/structure/stream")
+def post_structure_stream(session_id: str, body: StructureBody) -> StreamingResponse:
+    """Stream a focused prose interpretation of one specific chart structure."""
+    rec = store.get_session(session_id)
+    if not rec:
+        raise HTTPException(status_code=404, detail="session not found")
+    features = _compute_effective_features(rec)
+    aspects_short = features.get("aspects") or []
+
+    def event_generator():
+        pieces: list[str] = []
+        try:
+            for token in query_llm.run_structure_stream(features, body.structure, aspects_short):
+                pieces.append(token)
+                yield f"data: {json.dumps({'type': 'delta', 'content': token})}\n\n"
+            full_text = "".join(pieces)
+            rec.setdefault("structure_interpretations", {})[body.structure] = full_text
+            store.save_session(rec)
+            yield f"data: {json.dumps({'type': 'complete'})}\n\n"
+        except RuntimeError as e:
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'message': f'LLM error: {e!s}'})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )

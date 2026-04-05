@@ -56,6 +56,15 @@ def list_session_ids() -> list[str]:
     return sorted(p.stem for p in SESSIONS_DIR.glob("*.json") if p.suffix == ".json")
 
 
+def delete_session(session_id: str) -> bool:
+    """Remove session file (chart, themes, queries, etc.). Returns True if a file was removed."""
+    path = _path(session_id)
+    if not path.is_file():
+        return False
+    path.unlink()
+    return True
+
+
 def list_session_summaries() -> list[dict[str, Any]]:
     ensure_sessions_dir()
     out: list[dict[str, Any]] = []

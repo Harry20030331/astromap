@@ -1,11 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useRef } from "react";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
-import { SessionQueryDialog } from "@/components/session/SessionQueryDialog";
+import { SessionQueryChat } from "@/components/session/SessionQueryChat";
+import { LocaleToggle } from "@/components/LocaleToggle";
+import { useI18n } from "@/lib/i18n";
 
 export default function SessionWorkspace({ children }: { children: React.ReactNode }) {
+  const { t } = useI18n();
   const params = useParams();
   const id = params.id as string;
   const pathname = usePathname();
@@ -27,15 +30,6 @@ export default function SessionWorkspace({ children }: { children: React.ReactNo
     },
     [id, router],
   );
-
-  useEffect(() => {
-    if (!queryOpen) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [queryOpen]);
 
   const onTouchStart = (e: React.TouchEvent) => {
     const t = e.targetTouches[0];
@@ -60,9 +54,35 @@ export default function SessionWorkspace({ children }: { children: React.ReactNo
   const tabActive = "bg-[var(--surface)] text-stone-900 shadow-sm shadow-stone-200/50";
 
   return (
-    <div className="flex min-h-full flex-col">
-      <header className="sticky top-0 z-20 border-b border-stone-200/90 bg-[var(--background)]/95 backdrop-blur-md">
-        <div className="w-full min-w-0 px-4 py-2">
+    <div className="flex h-dvh flex-col overflow-hidden">
+      <header className="shrink-0 border-b border-stone-200/90 bg-[var(--background)]/95 backdrop-blur-md">
+        <div className="w-full min-w-0 px-4 pb-2 pt-2.5">
+          <div className="mb-2.5 flex items-center gap-2">
+            <Link
+              href="/"
+              aria-label={t("session.backToSessions")}
+              className="inline-flex shrink-0 rounded-md p-1.5 text-stone-600 transition-colors hover:bg-stone-100/80 hover:text-stone-900"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
+              >
+                <path d="m15 18-6-6 6-6" />
+              </svg>
+            </Link>
+            <span className="min-w-0 flex-1 select-none text-sm font-medium text-stone-600">
+              {t("session.backToSessions")}
+            </span>
+            <LocaleToggle />
+          </div>
           <div
             className="grid grid-cols-2 gap-1 rounded-xl bg-stone-200/70 p-1"
             role="tablist"
@@ -72,44 +92,64 @@ export default function SessionWorkspace({ children }: { children: React.ReactNo
               type="button"
               role="tab"
               aria-selected={!queryOpen}
-              className={`${tabBase} ${!queryOpen ? tabActive : tabInactive}`}
+              className={`${tabBase} ${!queryOpen ? tabActive : tabInactive} inline-flex items-center justify-center gap-1.5`}
               onClick={() => setQueryOpen(false)}
             >
-              View
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
+              >
+                <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+              {t("session.view")}
             </button>
             <button
               type="button"
               role="tab"
               aria-selected={queryOpen}
-              className={`${tabBase} ${queryOpen ? tabActive : tabInactive}`}
+              className={`${tabBase} ${queryOpen ? tabActive : tabInactive} inline-flex items-center justify-center gap-1.5`}
               onClick={() => setQueryOpen(true)}
             >
-              Query
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
+              >
+                <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
+              </svg>
+              {t("session.query")}
             </button>
           </div>
         </div>
       </header>
 
       <div
-        className="flex flex-1 touch-pan-y flex-col"
+        className="flex min-h-0 flex-1 flex-col overflow-hidden touch-pan-y"
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
       >
-        {children}
+        {queryOpen ? (
+          <SessionQueryChat sessionId={id} />
+        ) : (
+          <div className="flex-1 overflow-y-auto overscroll-contain">{children}</div>
+        )}
       </div>
-
-      <nav className="fixed bottom-0 left-0 right-0 z-10 border-t border-stone-200/90 bg-[var(--background)]/95 px-4 py-3 backdrop-blur-md">
-        <Link
-          href="/"
-          className="text-sm text-sky-800 underline decoration-sky-800/30 underline-offset-2 hover:text-sky-950"
-        >
-          Back to sessions
-        </Link>
-      </nav>
-
-      {queryOpen ? (
-        <SessionQueryDialog sessionId={id} onClose={() => setQueryOpen(false)} />
-      ) : null}
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { useCallback, useRef, useState } from "react";
 import { apiPost, apiPostFormData } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 
 const SUGGESTED_TOPICS = [
   "Love & relationships",
@@ -34,6 +35,7 @@ const resultCardClass =
   "rounded-xl border border-stone-200/90 bg-[var(--surface)] p-3 shadow-sm shadow-stone-100/50";
 
 export function SessionQueryPanel({ sessionId }: { sessionId: string }) {
+  const { locale } = useI18n();
   const [text, setText] = useState("");
   const [result, setResult] = useState<QueryResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -46,7 +48,7 @@ export function SessionQueryPanel({ sessionId }: { sessionId: string }) {
 
   const queryMut = useMutation({
     mutationFn: (q: string) =>
-      apiPost<QueryResponse>(`/sessions/${sessionId}/query`, { text: q }),
+      apiPost<QueryResponse>(`/sessions/${sessionId}/query`, { text: q, locale }),
     onSuccess: (data) => {
       setErr(null);
       setResult(data);

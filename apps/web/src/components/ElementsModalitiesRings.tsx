@@ -1,30 +1,31 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useI18n } from "@/lib/i18n";
 
 const ELEMENT_ORDER = ["fire", "earth", "air", "water"] as const;
 const ELEMENT_COLORS: Record<string, string> = {
-  fire: "#f97316",
-  earth: "#65a30d",
-  air: "#38bdf8",
-  water: "#2563eb",
+  fire: "#f2aaa4",
+  earth: "#f8d3a7",
+  air: "#85d3a5",
+  water: "#bbe4fc",
 };
 
 const MODALITY_ORDER = ["cardinal", "fixed", "mutable"] as const;
 const MODALITY_COLORS: Record<string, string> = {
-  cardinal: "#a78bfa",
-  fixed: "#f59e0b",
-  mutable: "#14b8a6",
+  cardinal: "#c4b0f8",
+  fixed: "#f8c8b0",
+  mutable: "#b8e0d8",
 };
 
-const LABEL: Record<string, string> = {
-  fire: "Fire",
-  earth: "Earth",
-  air: "Air",
-  water: "Water",
-  cardinal: "Cardinal",
-  fixed: "Fixed",
-  mutable: "Mutable",
+const LABEL_KEYS: Record<string, string> = {
+  fire: "ring.fire",
+  earth: "ring.earth",
+  air: "ring.air",
+  water: "ring.water",
+  cardinal: "ring.cardinal",
+  fixed: "ring.fixed",
+  mutable: "ring.mutable",
 };
 
 type RingKind = "elements" | "modalities";
@@ -67,11 +68,12 @@ function CategoryIcon({ name, color }: { name: string; color: string }) {
   const box = "0 0 24 24";
 
   if (k === "fire") {
+    /* Classical fire glyph: upward-pointing triangle (alchemical / elemental). */
     return (
       <svg width={22} height={22} viewBox={box} aria-hidden style={s}>
         <path
           fill="currentColor"
-          d="M12 3c-2.5 3.5-5 7-5 11.5 0 3.5 2 6.5 5 6.5s5-3 5-6.5c0-4.5-2.5-8-5-11.5Z"
+          d="M12 3.5 20.5 20.5H3.5L12 3.5Z"
         />
       </svg>
     );
@@ -165,15 +167,19 @@ function DonutRing({
   ring,
   selection,
   onLegendPointerDown,
+  tFn,
 }: {
   title: string;
   segments: { key: string; value: number; color: string }[];
   ring: RingKind;
   selection: LegendSelection | null;
   onLegendPointerDown: (ring: RingKind, key: string) => void;
+  tFn: (key: string, params?: Record<string, string | number>) => string;
 }) {
   const total = segments.reduce((s, x) => s + x.value, 0);
   const w = 144;
+  const legendColGapPx = 28;
+  const legendGridW = w + (legendColGapPx - 18);
   const h = 144;
   const cx = w / 2;
   const cy = h / 2;
@@ -184,7 +190,7 @@ function DonutRing({
 
   return (
     <div className="flex min-w-0 flex-col items-center">
-      <h3 className="mb-2 text-center text-base font-semibold tracking-tight text-stone-900">
+      <h3 className="mb-0.5 text-center text-base font-semibold tracking-tight text-stone-900">
         {title}
       </h3>
       <svg
@@ -193,7 +199,7 @@ function DonutRing({
         viewBox={`0 0 ${w} ${h}`}
         className="shrink-0 text-stone-300"
         role="img"
-        aria-label={`${title} distribution`}
+        aria-label={tFn("ring.distribution", { title })}
       >
         <g transform={`rotate(-90 ${cx} ${cy})`}>
           <circle
@@ -232,15 +238,21 @@ function DonutRing({
         </g>
       </svg>
 
-      <ul className="mt-3 grid w-full max-w-[11rem] grid-cols-2 gap-x-2 gap-y-2 sm:max-w-none">
+      <ul
+        className="mt-1 grid shrink-0 grid-cols-2 gap-y-0.5"
+        style={{ width: legendGridW, columnGap: legendColGapPx }}
+      >
         {segments.map((seg) => {
           const pct = total > 0 ? Math.round((seg.value / total) * 100) : 0;
-          const en = LABEL[seg.key] ?? seg.key;
+          const en = LABEL_KEYS[seg.key] ? tFn(LABEL_KEYS[seg.key]) : seg.key;
           const isOpen = selection?.ring === ring && selection.key === seg.key;
+          const tipBelow =
+            (ring === "elements" && (seg.key === "air" || seg.key === "water")) ||
+            (ring === "modalities" && seg.key === "mutable");
 
           return (
             <li key={seg.key} className="relative min-w-0">
-              <div className="flex items-center justify-center gap-1.5 sm:justify-start">
+              <div className="flex items-center justify-center gap-1.5">
                 <div className="relative shrink-0">
                   <button
                     type="button"
@@ -262,7 +274,7 @@ function DonutRing({
                     <div
                       id={`legend-tip-${ring}-${seg.key}`}
                       role="tooltip"
-                      className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-1.5 w-max max-w-[min(14rem,calc(100vw-2rem))] -translate-x-1/2 rounded-md border border-stone-200/90 bg-[var(--surface)] px-2.5 py-1.5 text-center text-xs font-medium leading-snug text-stone-900 shadow-lg shadow-stone-300/35"
+                      className={`pointer-events-none absolute left-1/2 z-30 w-max max-w-[min(14rem,calc(100vw-2rem))] -translate-x-1/2 rounded-md border border-stone-200/90 bg-[var(--surface)] px-2.5 py-1.5 text-center text-xs font-medium leading-snug text-stone-900 shadow-lg shadow-stone-300/35 ${tipBelow ? "top-full mt-1.5" : "bottom-full mb-1.5"}`}
                     >
                       {en}
                     </div>
@@ -290,6 +302,7 @@ export function ElementsModalitiesRings({
   elements: Record<string, number>;
   modalities: Record<string, number>;
 }) {
+  const { t } = useI18n();
   const elSegs = buildSegments(elements, ELEMENT_ORDER, ELEMENT_COLORS);
   const modSegs = buildSegments(modalities, MODALITY_ORDER, MODALITY_COLORS);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -332,24 +345,26 @@ export function ElementsModalitiesRings({
   return (
     <div
       ref={rootRef}
-      className="overflow-visible rounded-xl border border-stone-200/90 bg-[var(--surface)] p-3 shadow-sm shadow-stone-100/50"
+      className="overflow-visible rounded-xl border border-stone-200/90 bg-[var(--surface)] px-3 py-1.5 shadow-sm shadow-stone-100/50"
       role="group"
-      aria-label="Elements and modalities distribution"
+      aria-label={t("ring.ariaLabel")}
     >
       <div className="grid grid-cols-2 gap-3 sm:gap-5">
         <DonutRing
-          title="Elements"
+          title={t("ring.elements")}
           segments={elSegs}
           ring="elements"
           selection={selection}
           onLegendPointerDown={onLegendPointerDown}
+          tFn={t}
         />
         <DonutRing
-          title="Modalities"
+          title={t("ring.modalities")}
           segments={modSegs}
           ring="modalities"
           selection={selection}
           onLegendPointerDown={onLegendPointerDown}
+          tFn={t}
         />
       </div>
     </div>

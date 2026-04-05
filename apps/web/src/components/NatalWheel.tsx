@@ -8,6 +8,7 @@ import {
   normalizeDeg,
   polarToXY,
 } from "@/components/natalWheelMath";
+import { useI18n } from "@/lib/i18n";
 
 export type NatalBody = {
   name: string;
@@ -38,28 +39,8 @@ export type NatalAspect = {
 type Selection =
   | { kind: "body"; name: string }
   | { kind: "house"; number: number }
+  | { kind: "sign"; index: number }
   | null;
-
-const BODY_LABEL: Record<string, string> = {
-  Sun: "Sun",
-  Moon: "Mon",
-  Mercury: "Mer",
-  Venus: "Ven",
-  Mars: "Mar",
-  Jupiter: "Jup",
-  Saturn: "Sat",
-  Uranus: "Ura",
-  Neptune: "Nep",
-  Pluto: "Plu",
-  True_North_Lunar_Node: "NN",
-  True_South_Lunar_Node: "SN",
-  Ascendant: "ASC",
-  Descendant: "DES",
-  Medium_Coeli: "MC",
-  Imum_Coeli: "IC",
-  Chiron: "Chi",
-  Mean_Lilith: "Lil",
-};
 
 const ZODIAC_3: string[] = [
   "ARI",
@@ -76,7 +57,7 @@ const ZODIAC_3: string[] = [
   "PIS",
 ];
 
-const SIGN_TO_RULER: Record<string, keyof typeof BODY_LABEL | null> = {
+const SIGN_TO_RULER: Record<string, string | null> = {
   Ari: "Mars",
   Tau: "Venus",
   Gem: "Mercury",
@@ -91,50 +72,30 @@ const SIGN_TO_RULER: Record<string, keyof typeof BODY_LABEL | null> = {
   Pis: "Jupiter",
 };
 
-const PLANET_KEYWORDS: Record<string, string> = {
-  Sun: "Vitality, identity, conscious will",
-  Mon: "Emotions, needs, instinctive patterns",
-  Mer: "Mind, speech, learning, curiosity",
-  Ven: "Values, affection, harmony, pleasure",
-  Mar: "Drive, assertion, courage, desire",
-  Jup: "Growth, meaning, opportunity, faith",
-  Sat: "Structure, limits, maturity, responsibility",
-  Ura: "Freedom, innovation, disruption, truth",
-  Nep: "Imagination, compassion, transcendence, blur",
-  Plu: "Power, transformation, depth, letting go",
-  NN: "Direction, growth edge, unfamiliar pull",
-  SN: "Habit, release, familiar patterns",
-  ASC: "Persona, approach to life, first impressions",
-  DES: "Partnership, projection, one-to-one bonds",
-  MC: "Calling, reputation, public path",
-  IC: "Roots, private life, inner foundation",
-  Chi: "Wound, healing, mentoring arc",
-  Lil: "Wild instinct, taboo edge, raw desire",
-};
 
-const HOUSE_BLURBS: Record<number, { title: string; text: string }> = {
-  1: { title: "1st house", text: "Self-presentation, body, beginnings" },
-  2: { title: "2nd house", text: "Money, resources, values, security" },
-  3: { title: "3rd house", text: "Learning, siblings, neighborhood, communication" },
-  4: { title: "4th house", text: "Home, family, roots, private life" },
-  5: { title: "5th house", text: "Creativity, romance, play, children" },
-  6: { title: "6th house", text: "Work, health, habits, service" },
-  7: { title: "7th house", text: "Partnership, contracts, open enemies" },
-  8: { title: "8th house", text: "Shared resources, intimacy, change, crisis" },
-  9: { title: "9th house", text: "Beliefs, travel, higher learning, meaning" },
-  10: { title: "10th house", text: "Career, status, vocation, visibility" },
-  11: { title: "11th house", text: "Friends, groups, hopes, networks" },
-  12: { title: "12th house", text: "Solitude, subconscious, healing, closure" },
-};
-
-const NEON = ["#ff5c5c", "#5ce1e6", "#b8f25a", "#ffb84d", "#c792ff"];
+/** Parchment-manuscript zodiac sign colors – rich pigment inks on aged vellum.
+ *  fire=vermillion/brick, earth=olive/ochre, air=verdigris, water=ultramarine */
+const ZODIAC_SIGN_COLORS: string[] = [
+  "#b83828", // Aries       – fire: vermillion red
+  "#7a7830", // Taurus      – earth: olive ochre
+  "#28886a", // Gemini      – air: verdigris green
+  "#3060a0", // Cancer      – water: ultramarine
+  "#c04818", // Leo         – fire: flame orange-red
+  "#5a7028", // Virgo       – earth: sage olive
+  "#20887a", // Libra       – air: teal verdigris
+  "#284898", // Scorpio     – water: deep ultramarine
+  "#a84020", // Sagittarius – fire: brick red
+  "#707828", // Capricorn   – earth: dark ochre
+  "#1a8880", // Aquarius    – air: dark teal
+  "#4058a0", // Pisces      – water: lapis blue
+];
 
 const MAJOR_ASPECTS = new Set(["conjunction", "opposition", "trine", "square", "sextile"]);
 
 function aspectColor(aspect: string): string {
-  if (aspect === "opposition" || aspect === "square") return "rgba(255,92,92,0.55)";
-  if (aspect === "trine" || aspect === "sextile") return "rgba(92,225,230,0.5)";
-  return "rgba(184,242,90,0.45)";
+  if (aspect === "opposition" || aspect === "square") return "rgba(170,48,38,0.52)";
+  if (aspect === "trine" || aspect === "sextile") return "rgba(28,120,100,0.48)";
+  return "rgba(60,70,150,0.44)";
 }
 
 function aspectWithinOrb(
@@ -153,8 +114,8 @@ function aspectLineStrokeWidth(
   orbs: Readonly<Record<string, number>>,
 ): number {
   const maxOrb = orbs[aspect] ?? 6;
-  const wMin = 0.3;
-  const wMax = 3.1;
+  const wMin = 0.6;
+  const wMax = 3.6;
   if (maxOrb <= 0) return orbit <= 0 ? wMax : wMin;
   const tight = Math.max(0, Math.min(1, 1 - orbit / maxOrb));
   return wMin + tight * (wMax - wMin);
@@ -214,6 +175,43 @@ function houseWedgePath(
   return parts.join(" ");
 }
 
+/** Annular slice between rIn and rOut for zodiac band hit targets. */
+function zodiacBandWedgePath(
+  cx: number,
+  cy: number,
+  rIn: number,
+  rOut: number,
+  lonStart: number,
+  lonEnd: number,
+  seventh: number,
+  steps: number,
+): string {
+  let delta = normalizeDeg(lonEnd - lonStart);
+  if (delta > 180) delta -= 360;
+  const o0 = lonToXY(lonStart, seventh, cx, cy, rOut);
+  const parts: string[] = [`M ${o0.x} ${o0.y}`];
+  for (let s = 1; s <= steps; s++) {
+    const t = s / steps;
+    const lon = lonStart + t * delta;
+    const p = lonToXY(lon, seventh, cx, cy, rOut);
+    parts.push(`L ${p.x} ${p.y}`);
+  }
+  const i1 = lonToXY(lonEnd, seventh, cx, cy, rIn);
+  parts.push(`L ${i1.x} ${i1.y}`);
+  for (let s = steps - 1; s >= 0; s--) {
+    const t = s / steps;
+    const lon = lonStart + t * delta;
+    const p = lonToXY(lon, seventh, cx, cy, rIn);
+    parts.push(`L ${p.x} ${p.y}`);
+  }
+  parts.push("Z");
+  return parts.join(" ");
+}
+
+function wheelAccentColor(index: number): string {
+  return ZODIAC_SIGN_COLORS[((index % 12) + 12) % 12] ?? "#5a4830";
+}
+
 export function NatalWheel({
   bodies,
   houses,
@@ -227,9 +225,15 @@ export function NatalWheel({
   includedPoints: ReadonlySet<string>;
   aspectOrbs: Readonly<Record<string, number>>;
 }) {
+  const { t } = useI18n();
   const [sel, setSel] = useState<Selection>(null);
 
   const close = useCallback(() => setSel(null), []);
+
+  const bodyShort = useCallback((name: string) => t(`body.short.${name}`) !== `body.short.${name}` ? t(`body.short.${name}`) : name.slice(0, 3), [t]);
+  const bodyFull = useCallback((name: string) => t(`body.${name}`) !== `body.${name}` ? t(`body.${name}`) : name, [t]);
+  const zodiacShort = useCallback((i: number) => t(`zodiac.short.${i}`), [t]);
+  const zodiacFull = useCallback((i: number) => t(`zodiac.${i}`), [t]);
 
   useEffect(() => {
     if (!sel) return;
@@ -316,8 +320,11 @@ export function NatalWheel({
     if (sel.kind === "body") {
       const b = byName.get(sel.name);
       if (!b) return null;
-      const lab = BODY_LABEL[b.name] ?? b.name;
+      const displayName = bodyFull(b.name);
+      const titleColor = colorForBody(b.name);
       const hi = parseHouseIndex(b.house);
+      const kwKey = `keyword.${b.name}`;
+      const kw = t(kwKey) !== kwKey ? t(kwKey) : "—";
       const aspectsFor = aspects.filter(
         (a) =>
           MAJOR_ASPECTS.has(a.aspect) &&
@@ -325,9 +332,11 @@ export function NatalWheel({
           ((a.p1 === b.name && includedPoints.has(a.p2)) ||
             (a.p2 === b.name && includedPoints.has(a.p1))),
       );
+      const signIdx = ZODIAC_3.indexOf(signTo3(b.sign));
+      const signLabel = signIdx >= 0 ? zodiacShort(signIdx) : signTo3(b.sign);
       return (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 p-4"
           role="presentation"
           onClick={close}
         >
@@ -338,10 +347,10 @@ export function NatalWheel({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-2">
-              <p className="flex flex-wrap items-baseline gap-x-2 text-lg font-semibold leading-tight text-sky-700">
-                <span>{lab}</span>
+              <p className="flex flex-wrap items-baseline gap-x-2 text-lg font-semibold leading-tight">
+                <span style={{ color: titleColor }}>{displayName}</span>
                 {b.retrograde ? (
-                  <span className="text-xs font-medium text-amber-700">[Retrograde]</span>
+                  <span className="text-xs font-medium text-amber-700">[{t("wheel.retrograde")}]</span>
                 ) : null}
               </p>
               <button
@@ -353,30 +362,30 @@ export function NatalWheel({
               </button>
             </div>
             <p className="mt-0.5 text-sm leading-snug text-stone-600">
-              {PLANET_KEYWORDS[lab] ?? "—"}
+              {kw}
             </p>
             <p className="mt-2 text-sm leading-snug">
-              <span className="font-medium text-stone-800">Sign:</span>{" "}
-              <span className="text-rose-700">{signTo3(b.sign)}</span>{" "}
+              <span className="font-medium text-stone-800">{t("wheel.sign")}:</span>{" "}
+              <span className="text-rose-700">{signLabel}</span>{" "}
               {formatDmsWithinSign(b.position)}
               <span className="mx-2 text-stone-300" aria-hidden>
                 ·
               </span>
-              <span className="font-medium text-stone-800">House:</span>{" "}
-              {hi != null ? `${hi}${ordinalSuffix(hi)}` : "—"}
+              <span className="font-medium text-stone-800">{t("wheel.house")}:</span>{" "}
+              {hi != null ? t(`house.${hi}.title`) : "—"}
             </p>
             {aspectsFor.length > 0 ? (
               <div className="mt-2 border-t border-stone-100 pt-1.5">
                 <ul className="grid list-none grid-cols-2 gap-x-2 gap-y-1 pl-0 text-sm leading-snug text-stone-700">
                   {aspectsFor.map((a) => {
                     const other = a.p1 === b.name ? a.p2 : a.p1;
-                    const ol = BODY_LABEL[other] ?? other;
+                    const ol = bodyShort(other);
                     return (
                       <li key={`${a.p1}-${a.p2}-${a.aspect}`} className="min-w-0 leading-snug">
                         <span className="text-sky-800 underline decoration-sky-800/30">
                           {ol}
                         </span>{" "}
-                        {a.aspect_degrees}° {aspectSymbol(a.aspect)} · orb {formatOrb(a.orbit)}
+                        {a.aspect_degrees}° {aspectSymbol(a.aspect)} · {formatOrb(a.orbit)}
                       </li>
                     );
                   })}
@@ -387,16 +396,60 @@ export function NatalWheel({
         </div>
       );
     }
+    if (sel.kind === "sign") {
+      const idx = sel.index;
+      if (idx < 0 || idx > 11) return null;
+      const signName = zodiacFull(idx);
+      const traitsKey = `zodiac.traits.${idx}`;
+      const traitsText = t(traitsKey) !== traitsKey ? t(traitsKey) : "";
+      const titleColor = wheelAccentColor(idx);
+      return (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 p-4"
+          role="presentation"
+          onClick={close}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="max-h-[min(80vh,520px)] w-full max-w-sm overflow-y-auto rounded-2xl bg-white p-3 text-stone-900 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-lg font-semibold leading-tight">
+                <span style={{ color: titleColor }}>{signName}</span>
+              </p>
+              <button
+                type="button"
+                className="rounded-md px-2 py-1 text-sm text-stone-500 hover:bg-stone-100"
+                onClick={close}
+              >
+                ×
+              </button>
+            </div>
+            {traitsText ? (
+              <p className="mt-2 text-sm leading-snug text-stone-600">
+                {traitsText}
+              </p>
+            ) : null}
+          </div>
+        </div>
+      );
+    }
     const h = cuspByHouse.get(sel.number);
     if (!h) return null;
-    const blurb = HOUSE_BLURBS[sel.number];
+    const houseTitle = t(`house.${sel.number}.title`);
+    const houseText = t(`house.${sel.number}.text`);
     const rulerName = SIGN_TO_RULER[h.sign] ?? null;
     const rulerBody = rulerName ? byName.get(rulerName) : null;
     const rulerHouse = rulerBody ? parseHouseIndex(rulerBody.house) : null;
-    const rLab = rulerName ? (BODY_LABEL[rulerName] ?? rulerName) : null;
+    const rLab = rulerName ? bodyShort(rulerName) : null;
+    const houseTitleColor = wheelAccentColor(sel.number - 1);
+    const signIdx = ZODIAC_3.indexOf(signTo3(h.sign));
+    const cuspSignLabel = signIdx >= 0 ? zodiacShort(signIdx) : signTo3(h.sign);
     return (
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 p-4"
         role="presentation"
         onClick={close}
       >
@@ -407,9 +460,10 @@ export function NatalWheel({
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-start justify-between gap-2">
-            <p className="text-lg font-semibold leading-tight text-violet-700">
-              {sel.number}
-              {ordinalSuffix(sel.number)} house
+            <p className="text-lg font-semibold leading-tight">
+              <span style={{ color: houseTitleColor }}>
+                {houseTitle}
+              </span>
             </p>
             <button
               type="button"
@@ -419,26 +473,22 @@ export function NatalWheel({
               ×
             </button>
           </div>
-          {blurb ? (
-            <p className="mt-1.5 text-sm leading-snug text-stone-600">{blurb.text}</p>
+          {houseText !== `house.${sel.number}.text` ? (
+            <p className="mt-1.5 text-sm leading-snug text-stone-600">{houseText}</p>
           ) : null}
           <p className="mt-2 text-sm leading-snug">
-            <span className="font-medium text-stone-800">Cusp:</span>{" "}
-            <span className="text-rose-700">{signTo3(h.sign)}</span>{" "}
+            <span className="font-medium text-stone-800">{t("wheel.cusp")}:</span>{" "}
+            <span className="text-rose-700">{cuspSignLabel}</span>{" "}
             {formatDmsWithinSign(h.cusp_longitude)}
           </p>
           {rLab ? (
             <p className="mt-1.5 text-sm leading-snug">
-              <span className="font-medium text-stone-800">Traditional ruler:</span>{" "}
+              <span className="font-medium text-stone-800">{t("wheel.ruler")}:</span>{" "}
               <span className="text-rose-700">{rLab}</span>
               {rulerHouse != null ? (
                 <>
                   {" "}
-                  in the{" "}
-                  <span className="text-sky-800 underline decoration-sky-800/30">
-                    {rulerHouse}
-                    {ordinalSuffix(rulerHouse)}
-                  </span>
+                  {t("wheel.inHouse", { n: t(`house.${rulerHouse}.title`) })}
                 </>
               ) : null}
             </p>
@@ -446,29 +496,97 @@ export function NatalWheel({
         </div>
       </div>
     );
-  }, [sel, byName, aspects, cuspByHouse, close, includedPoints, aspectOrbs]);
+  }, [sel, byName, aspects, cuspByHouse, close, includedPoints, aspectOrbs, t, bodyShort, bodyFull, zodiacShort, zodiacFull]);
+
+  const signPalette = ZODIAC_SIGN_COLORS;
+  const colors = {
+    zodiacTickMajor: "#a89848",
+    zodiacTickMinor: "#c4b068",
+    houseDivAngular: "#7a6828",
+    houseDivRegular: "#a89850",
+    innerCircle: "#988838",
+    innerGuide: "#c4b068",
+    tickMajorWidth: 2.8,
+    tickMinorWidth: 2.0,
+    zodiacFontSize: 15,
+    houseDivAngularWidth: 2.4,
+    houseDivRegularWidth: 1.3,
+    houseDivAngularOpacity: 0.95,
+    houseDivRegularOpacity: 0.85,
+    houseNumFontSize: 16,
+    bodyLabelFontSize: 15,
+    innerCircleWidth: 2.8,
+    innerGuideWidth: 1.1,
+    innerGuideOpacity: 0.5,
+    aspectGroupOpacity: 1,
+    bodyLineOpacity: 1,
+  };
 
   return (
     <div className="natal-wheel w-full">
-      <div className="overflow-hidden rounded-xl border border-stone-700/80 bg-[#0a0a0a] shadow-lg shadow-black/40">
+      <div>
         <svg
           viewBox={`0 0 ${VB} ${VB}`}
           className="block h-auto w-full"
           role="img"
-          aria-label="Natal chart wheel"
+          aria-label={t("wheel.ariaLabel")}
+          style={{ filter: "drop-shadow(0 1px 4px rgba(90,70,30,0.12))" }}
         >
-          <rect width={VB} height={VB} fill="#080808" />
+          <defs>
+            <filter id="ragged-edge" x="-6%" y="-6%" width="112%" height="112%">
+              <feTurbulence
+                type="turbulence"
+                baseFrequency="0.022"
+                numOctaves="6"
+                seed="7"
+                result="warp"
+              />
+              <feDisplacementMap
+                in="SourceGraphic"
+                in2="warp"
+                scale="28"
+                xChannelSelector="R"
+                yChannelSelector="G"
+              />
+            </filter>
+            <mask id="parch-mask">
+              <rect
+                x="14" y="14"
+                width={VB - 28} height={VB - 28}
+                rx="2"
+                fill="white"
+                filter="url(#ragged-edge)"
+              />
+            </mask>
+          </defs>
+          <g mask="url(#parch-mask)">
+          <g
+            transform={`translate(${CX} ${CY}) scale(${PARCH_TEXTURE_SCALE}) translate(${-CX} ${-CY})`}
+          >
+            <image
+              href="/images/parchment.png"
+              x="0"
+              y="0"
+              width={VB}
+              height={VB}
+              preserveAspectRatio="none"
+            />
+          </g>
+          <g
+            transform={`translate(${CX} ${CY}) scale(${WHEEL_CONTENT_SCALE}) translate(${-CX} ${-CY})`}
+          >
           {/* Zodiac ticks + labels */}
           {ZODIAC_3.map((abbr, i) => {
             const lon0 = i * 30;
             const lon1 = (i + 1) * 30;
             const mid = lon0 + 15;
-            const c = NEON[i % NEON.length];
+            const c = signPalette[i] ?? "#888";
             const p0 = lonToXY(lon0, seventh, CX, CY, R_ZOD_OUT);
             const p1 = lonToXY(lon1, seventh, CX, CY, R_ZOD_OUT);
             const p0in = lonToXY(lon0, seventh, CX, CY, R_ZOD_IN);
             const p1in = lonToXY(lon1, seventh, CX, CY, R_ZOD_IN);
             const pm = lonToXY(mid, seventh, CX, CY, R_ZOD_MID);
+            const displayAbbr = zodiacShort(i);
             return (
               <g key={abbr}>
                 <line
@@ -476,17 +594,8 @@ export function NatalWheel({
                   y1={p0in.y}
                   x2={p0.x}
                   y2={p0.y}
-                  stroke="#3a3a3a"
-                  strokeWidth={0.75}
-                />
-                <line
-                  x1={p0in.x}
-                  y1={p0in.y}
-                  x2={p1in.x}
-                  y2={p1in.y}
-                  stroke="#2a2a2a"
-                  strokeWidth={0.5}
-                  opacity={0.85}
+                  stroke={colors.zodiacTickMajor}
+                  strokeWidth={colors.tickMajorWidth}
                 />
                 <text
                   x={pm.x}
@@ -494,12 +603,40 @@ export function NatalWheel({
                   textAnchor="middle"
                   dominantBaseline="middle"
                   fill={c}
-                  style={{ fontSize: 11, fontFamily: "ui-sans-serif, system-ui, sans-serif" }}
-                  fontWeight={600}
+                  style={{ fontSize: colors.zodiacFontSize, fontFamily: "Palatino, 'Palatino Linotype', Georgia, 'Book Antiqua', serif" }}
+                  fontWeight={800}
                 >
-                  {abbr}
+                  {displayAbbr}
                 </text>
               </g>
+            );
+          })}
+          {/* Zodiac band (click → sign traits) */}
+          {ZODIAC_3.map((abbr, i) => {
+            const lon0 = i * 30;
+            const lon1 = (i + 1) * 30;
+            const d = zodiacBandWedgePath(
+              CX,
+              CY,
+              R_ZOD_IN,
+              R_ZOD_OUT,
+              lon0,
+              lon1,
+              seventh,
+              24,
+            );
+            const signName = zodiacFull(i);
+            return (
+              <path
+                key={`zs-${abbr}`}
+                d={d}
+                fill="transparent"
+                stroke="none"
+                style={{ cursor: "pointer" }}
+                onClick={() => setSel({ kind: "sign", index: i })}
+              >
+                <title>{signName}</title>
+              </path>
             );
           })}
           {/* House wedges (click) */}
@@ -511,7 +648,7 @@ export function NatalWheel({
                 const d = houseWedgePath(
                   CX,
                   CY,
-                  28,
+                  R_HOUSE_WEDGE_IN,
                   R_HOUSE_HIT,
                   h.abs_pos,
                   next.abs_pos,
@@ -527,7 +664,7 @@ export function NatalWheel({
                     style={{ cursor: "pointer" }}
                     onClick={() => setSel({ kind: "house", number: h.number })}
                   >
-                    <title>{`House ${h.number}`}</title>
+                    <title>{t(`house.${h.number}.title`)}</title>
                   </path>
                 );
               })
@@ -535,7 +672,7 @@ export function NatalWheel({
           {/* House division lines */}
           {houses.map((h) => {
             const pOut = lonToXY(h.abs_pos, seventh, CX, CY, R_ZOD_IN);
-            const pIn = lonToXY(h.abs_pos, seventh, CX, CY, 26);
+            const pIn = lonToXY(h.abs_pos, seventh, CX, CY, R_HOUSE_CUSP_IN);
             const thick =
               h.number === 1 || h.number === 4 || h.number === 7 || h.number === 10;
             return (
@@ -545,9 +682,9 @@ export function NatalWheel({
                 y1={pIn.y}
                 x2={pOut.x}
                 y2={pOut.y}
-                stroke={thick ? "#8a8a8a" : "#4a4a4a"}
-                strokeWidth={thick ? 1.35 : 0.65}
-                opacity={thick ? 0.95 : 0.75}
+                stroke={thick ? colors.houseDivAngular : colors.houseDivRegular}
+                strokeWidth={thick ? colors.houseDivAngularWidth : colors.houseDivRegularWidth}
+                opacity={thick ? colors.houseDivAngularOpacity : colors.houseDivRegularOpacity}
               />
             );
           })}
@@ -560,7 +697,7 @@ export function NatalWheel({
             if (delta > 180) delta -= 360;
             const midLon = h.abs_pos + delta / 2;
             const p = lonToXY(midLon, seventh, CX, CY, R_HOUSE_NUM);
-            const col = NEON[(h.number - 1) % NEON.length];
+            const col = signPalette[(h.number - 1) % 12] ?? "#888";
             return (
               <text
                 key={`hn-${h.number}`}
@@ -570,11 +707,11 @@ export function NatalWheel({
                 dominantBaseline="middle"
                 fill={col}
                 style={{
-                  fontSize: 12,
-                  fontFamily: "ui-sans-serif, system-ui, sans-serif",
+                  fontSize: colors.houseNumFontSize,
+                  fontFamily: "Palatino, 'Palatino Linotype', Georgia, 'Book Antiqua', serif",
                   cursor: "pointer",
                 }}
-                fontWeight={700}
+                fontWeight={900}
                 onClick={() => setSel({ kind: "house", number: h.number })}
               >
                 {h.number}
@@ -586,20 +723,11 @@ export function NatalWheel({
             cy={CY}
             r={R_ZOD_IN}
             fill="none"
-            stroke="#333"
-            strokeWidth={0.75}
-          />
-          <circle
-            cx={CX}
-            cy={CY}
-            r={R_INNER_GUIDE}
-            fill="none"
-            stroke="#2c2c2c"
-            strokeWidth={0.5}
-            opacity={0.45}
+            stroke={colors.innerCircle}
+            strokeWidth={colors.innerCircleWidth}
           />
           {/* Aspects */}
-          <g opacity={0.9}>
+          <g opacity={colors.aspectGroupOpacity}>
             {aspectLines.map((ln) => (
               <line
                 key={ln.key}
@@ -617,11 +745,11 @@ export function NatalWheel({
           {planetStacks.map((stack) =>
             stack.map((b, j) => {
               const rDot = R_PLANET_BASE - j * R_PLANET_STACK_STEP;
-              const rText = rDot - R_LABEL_INSET;
+              const rText = Math.min(rDot + R_LABEL_OUTSET, R_ZOD_IN - 10);
               const radial = lonToRadial(b.abs_pos, seventh);
               const dot = polarToXY(CX, CY, rDot, radial);
               const txt = polarToXY(CX, CY, rText, radial);
-              const lab = BODY_LABEL[b.name] ?? b.name;
+              const lab = bodyShort(b.name);
               const col = colorForBody(b.name);
               return (
                 <g
@@ -635,11 +763,11 @@ export function NatalWheel({
                     x2={txt.x}
                     y2={txt.y}
                     stroke={col}
-                    strokeWidth={0.6}
-                    opacity={0.85}
+                    strokeWidth={1.0}
+                    opacity={colors.bodyLineOpacity}
                   />
-                  <circle cx={dot.x} cy={dot.y} r={8} fill="transparent" />
-                  <circle cx={dot.x} cy={dot.y} r={3.2} fill={col} opacity={0.95} />
+                  <circle cx={dot.x} cy={dot.y} r={10} fill="transparent" />
+                  <circle cx={dot.x} cy={dot.y} r={4} fill={col} opacity={0.95} />
                   <text
                     x={txt.x}
                     y={txt.y}
@@ -647,10 +775,10 @@ export function NatalWheel({
                     dominantBaseline="middle"
                     fill={col}
                     style={{
-                      fontSize: 10,
-                      fontFamily: "ui-sans-serif, system-ui, sans-serif",
+                      fontSize: colors.bodyLabelFontSize,
+                      fontFamily: "Palatino, 'Palatino Linotype', Georgia, 'Book Antiqua', serif",
+                      fontWeight: 400,
                     }}
-                    fontWeight={600}
                   >
                     {lab}
                   </text>
@@ -665,6 +793,8 @@ export function NatalWheel({
               );
             }),
           )}
+          </g>
+          </g>
         </svg>
       </div>
       {modal}
@@ -672,34 +802,30 @@ export function NatalWheel({
   );
 }
 
-const VB = 520;
+/** Square viewBox side length; larger canvas lets the outer zodiac/house ring breathe. */
+const VB = 540;
 const CX = VB / 2;
 const CY = VB / 2;
-const R_ZOD_OUT = 248;
-const R_ZOD_IN = 210;
-const R_ZOD_MID = 230;
-const R_HOUSE_NUM = 188;
-const R_HOUSE_HIT = 205;
-/** Outermost planet dot radius (px); larger = bodies farther out, aspect chords miss chart center more. */
-const R_PLANET_BASE = 154;
+/** >1 zooms parchment bitmap only (center-fixed); wheel geometry unchanged. */
+const PARCH_TEXTURE_SCALE = 1.0;
+/** Scale factor for wheel geometry only (parchment unchanged), centered on canvas. */
+const WHEEL_CONTENT_SCALE = 0.95;
+/** Outer zodiac band (ticks + sign labels), scaled up from the old 520 canvas. */
+const R_ZOD_OUT = 257;
+const R_ZOD_IN = 218;
+const R_ZOD_MID = 239;
+/** House numerals sit outside the planet label band to reduce overlap. */
+const R_HOUSE_NUM = 196;
+const R_HOUSE_HIT = 213;
+/** Inner hub for house cusp lines and wedge paths (keeps proportions vs VB). */
+const R_HOUSE_CUSP_IN = 27;
+const R_HOUSE_WEDGE_IN = 29;
+/** Outermost planet dot; pulled in so labels stay radially inside house numbers. */
+const R_PLANET_BASE = 144;
 const R_PLANET_STACK_STEP = 11;
-const R_LABEL_INSET = 24;
-const R_INNER_GUIDE = 64;
-
-function ordinalSuffix(n: number): string {
-  const v = n % 100;
-  if (v >= 11 && v <= 13) return "th";
-  switch (n % 10) {
-    case 1:
-      return "st";
-    case 2:
-      return "nd";
-    case 3:
-      return "rd";
-    default:
-      return "th";
-  }
-}
+/** Label sits outside the dot along the same radial so aspect chords (which pass inside the dots) rarely cross text. */
+const R_LABEL_OUTSET = 24;
+const R_INNER_GUIDE = 66;
 
 function formatOrb(o: number): string {
   const d = Math.floor(o);
@@ -707,26 +833,27 @@ function formatOrb(o: number): string {
   return `${d}°${String(m).padStart(2, "0")}'`;
 }
 
+/** Pigment-ink colors on parchment — saturated, manuscript-style. */
 function colorForBody(name: string): string {
   const palette: Record<string, string> = {
-    Sun: "#ffb84d",
-    Moon: "#5ce1e6",
-    Mercury: "#b8f25a",
-    Venus: "#ff7eb3",
-    Mars: "#ff5c5c",
-    Jupiter: "#c792ff",
-    Saturn: "#8ab4ff",
-    Uranus: "#5ce1e6",
-    Neptune: "#7ecbff",
-    Pluto: "#dda0dd",
-    True_North_Lunar_Node: "#f5f5a0",
-    True_South_Lunar_Node: "#c4c4a8",
-    Ascendant: "#ffffff",
-    Descendant: "#e0e0e0",
-    Medium_Coeli: "#ffffff",
-    Imum_Coeli: "#c8c8c8",
-    Chiron: "#a8d8ea",
-    Mean_Lilith: "#e6a8d8",
+    Sun: "#c08018",
+    Moon: "#4a6890",
+    Mercury: "#908020",
+    Venus: "#b83060",
+    Mars: "#b82820",
+    Jupiter: "#6838a0",
+    Saturn: "#584830",
+    Uranus: "#108890",
+    Neptune: "#2060b0",
+    Pluto: "#803880",
+    True_North_Lunar_Node: "#787020",
+    True_South_Lunar_Node: "#686048",
+    Ascendant: "#2a1810",
+    Descendant: "#483828",
+    Medium_Coeli: "#2a1810",
+    Imum_Coeli: "#585040",
+    Chiron: "#207858",
+    Mean_Lilith: "#903878",
   };
-  return palette[name] ?? "#eaeaea";
+  return palette[name] ?? "#5a4830";
 }

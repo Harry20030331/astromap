@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { apiGet } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 
 const MIN_LEN = 2;
 const DEBOUNCE_MS = 350;
@@ -29,6 +30,11 @@ type BirthPlacePickerProps = {
   /** false when user is typing a place query but has not picked a suggestion. */
   onCommitmentChange?: (committed: boolean) => void;
   disabled?: boolean;
+  /**
+   * When true, initial input matches `value` (use with a remounting `key` after loading saved birth data).
+   * When false, the place field starts empty like a fresh form.
+   */
+  seedDisplayFromValue?: boolean;
 };
 
 function formatSuggestionLabel(hit: CityHit): string {
@@ -38,17 +44,27 @@ function formatSuggestionLabel(hit: CityHit): string {
   return `${hit.name}${admin}${tail}`;
 }
 
+function seedLineFromValue(v: BirthPlaceValue): string {
+  return [v.city, v.nation].filter(Boolean).join(", ");
+}
+
 export function BirthPlacePicker({
   value,
   onChange,
   onCommitmentChange,
   disabled = false,
+  seedDisplayFromValue = false,
 }: BirthPlacePickerProps) {
-  const [input, setInput] = useState("");
+  const { t } = useI18n();
+  const [input, setInput] = useState(() =>
+    seedDisplayFromValue ? seedLineFromValue(value) : "",
+  );
   const [hits, setHits] = useState<CityHit[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchErr, setSearchErr] = useState<string | null>(null);
-  const [selectedLabel, setSelectedLabel] = useState<string | null>(null);
+  const [selectedLabel, setSelectedLabel] = useState<string | null>(() =>
+    seedDisplayFromValue ? seedLineFromValue(value) || null : null,
+  );
 
   const applyHit = useCallback(
     async (hit: CityHit) => {
@@ -77,7 +93,7 @@ export function BirthPlacePicker({
           lng: hit.lng,
           tzStr: value.tzStr,
         });
-        setSearchErr(e instanceof Error ? e.message : "Time zone lookup failed");
+        setSearchErr(e instanceof Error ? e.message : t("place.tzFailed"));
       }
     },
     [onChange, onCommitmentChange, value.tzStr],
@@ -119,7 +135,7 @@ export function BirthPlacePicker({
     let cancelled = false;
     setLoading(true);
     setSearchErr(null);
-    const t = window.setTimeout(() => {
+    const timer = window.setTimeout(() => {
       apiGet<{ cities: CityHit[] }>(
         `/geo/cities?q=${encodeURIComponent(term)}`,
       )
@@ -132,13 +148,13 @@ export function BirthPlacePicker({
           if (cancelled) return;
           setLoading(false);
           setHits([]);
-          setSearchErr(e instanceof Error ? e.message : "Place search failed");
+          setSearchErr(e instanceof Error ? e.message : t("place.searchFailed"));
         });
     }, DEBOUNCE_MS);
 
     return () => {
       cancelled = true;
-      window.clearTimeout(t);
+      window.clearTimeout(timer);
     };
   }, [input, disabled, selectedLabel]);
 
@@ -152,7 +168,7 @@ export function BirthPlacePicker({
     <div className="flex flex-col gap-3">
       <div className="relative flex flex-col gap-1">
         <label className="text-xs text-stone-500">
-          Birth Place
+          {t("home.birthPlace")}
           <div className="relative mt-1">
             <span
               className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"
@@ -177,7 +193,7 @@ export function BirthPlacePicker({
               className="w-full rounded-md border border-stone-200 bg-[var(--surface)] py-2 pl-9 pr-3 text-sm text-stone-900 shadow-inner shadow-stone-100/80 placeholder:text-stone-400"
               value={input}
               disabled={disabled}
-              placeholder="e.g. Beijing, Paris"
+              placeholder={t("home.birthPlacePlaceholder")}
               autoComplete="off"
               onChange={(e) => {
                 setSelectedLabel(null);
@@ -189,7 +205,7 @@ export function BirthPlacePicker({
         {showPanel ? (
           <div className="absolute top-full z-10 mt-1 max-h-56 w-full overflow-auto rounded-md border border-stone-200/90 bg-[var(--surface)] text-sm shadow-lg shadow-stone-200/50">
             {loading ? (
-              <div className="px-3 py-2 text-stone-500">Searching…</div>
+              <div className="px-3 py-2 text-stone-500">{t("place.searching")}</div>
             ) : null}
             {searchErr ? (
               <div className="px-3 py-2 text-red-700">{searchErr}</div>

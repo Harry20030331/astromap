@@ -14,11 +14,11 @@ DEFAULT_ORB_MAX = 6.0
 
 # App default orbs (keep equal to web `DEFAULT_ASPECT_ORBS` in chartPreferences.ts).
 DEFAULT_ASPECT_ORBS: dict[str, float] = {
-    "conjunction": DEFAULT_ORB_MAX,
-    "sextile": DEFAULT_ORB_MAX,
-    "square": DEFAULT_ORB_MAX,
-    "trine": DEFAULT_ORB_MAX,
-    "opposition": DEFAULT_ORB_MAX,
+    "conjunction": 8.0,
+    "sextile": 3.0,
+    "square": 5.0,
+    "trine": 3.0,
+    "opposition": 5.0,
 }
 
 STELLIUM_MIN = 3
@@ -65,17 +65,8 @@ ALLOWED_ANALYSIS_POINTS = frozenset(
     }
 )
 
-DEFAULT_INCLUDED_POINTS = frozenset(
-    STELLIUM_KEYS
-    | {
-        "True_North_Lunar_Node",
-        "True_South_Lunar_Node",
-        "Ascendant",
-        "Descendant",
-        "Medium_Coeli",
-        "Imum_Coeli",
-    }
-)
+# Default visible / feature-driving points: classical ten only (no nodes, no angles).
+DEFAULT_INCLUDED_POINTS = STELLIUM_KEYS
 
 
 def _distribution_from_bodies(bodies: list[dict[str, Any]]) -> tuple[dict[str, int], dict[str, int]]:

@@ -82,6 +82,31 @@ def test_create_and_get_session(monkeypatch):
     assert sid in ids
 
 
+def test_delete_session(monkeypatch):
+    monkeypatch.setattr("app.main._run_themes_job", lambda sid: None)
+
+    body = {
+        "label": "To delete",
+        "birth_date": "1991-06-01",
+        "birth_time": "09:00",
+        "tz_str": "Europe/London",
+        "lat": 51.5074,
+        "lng": -0.1278,
+    }
+    r = client.post("/sessions", json=body)
+    assert r.status_code == 200, r.text
+    sid = r.json()["session_id"]
+
+    d = client.delete(f"/sessions/{sid}")
+    assert d.status_code == 204, d.text
+
+    assert client.get(f"/sessions/{sid}").status_code == 404
+    lst = client.get("/sessions")
+    assert sid not in [s["id"] for s in lst.json()["sessions"]]
+
+    assert client.delete(f"/sessions/{sid}").status_code == 404
+
+
 def test_transcribe_unknown_session():
     fake = "00000000-0000-0000-0000-000000000000"
     r = client.post(
