@@ -48,7 +48,7 @@ export default function SessionWorkspace({ children }: { children: React.ReactNo
   // Track: [View (left)] [Query (right)]
   //   View  (queryOpen=false) → translateX(0)
   //   Query (queryOpen=true)  → translateX(-w)
-  // 手指从右到左 (dx<0) = 从 View 进入 Query
+  // Swipe right-to-left (dx < 0) moves from View into Query
   const pos = (w: number) => (queryOpen ? -w : 0);
 
   // Set initial position BEFORE first paint (no flash, no transition)
@@ -109,8 +109,8 @@ export default function SessionWorkspace({ children }: { children: React.ReactNo
       const w = wrapper.offsetWidth;
       const open = queryOpenRef.current;
 
-      // open=false (View, at 0):   dx>0 橡皮筋；dx<0 有效（滑向 Query）
-      // open=true  (Query, at -w): dx<0 橡皮筋；dx>0 有效（滑回 View）
+      // open=false (View at 0): dx>0 rubber-band; dx<0 drags toward Query
+      // open=true (Query at -w): dx<0 rubber-band; dx>0 drags back toward View
       let raw: number;
       if (!open && dx > 0) {
         raw = dx * 0.15;
@@ -137,11 +137,11 @@ export default function SessionWorkspace({ children }: { children: React.ReactNo
       track.style.transition = "transform 0.35s cubic-bezier(0.25, 1, 0.5, 1)";
 
       if (!open && dx < -threshold) {
-        // View → 手指从右到左 → Query
+        // View → swipe right-to-left → Query
         track.style.transform = `translateX(${-w}px)`;
         setQueryOpen(true);
       } else if (open && dx > threshold) {
-        // Query → 手指从左到右 → View
+        // Query → swipe left-to-right → View
         track.style.transform = `translateX(0px)`;
         setQueryOpen(false);
       } else {
