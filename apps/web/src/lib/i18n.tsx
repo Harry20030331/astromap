@@ -30,7 +30,7 @@ function getInitialLocale(): Locale {
 const en: Record<string, string> = {
   // Home
   "home.subtitle": "AI-native Astrologer Workspace",
-  "home.birthData": "New Client",
+  "home.birthData": "New Querent",
   "home.name": "Name",
   "home.date": "Date",
   "home.timeLocal": "Time (local)",
@@ -40,7 +40,7 @@ const en: Record<string, string> = {
   "home.calculating": "Calculating…",
   "home.createChart": "View Chart",
   "home.sessions": "Sessions",
-  "home.pastSessions": "History",
+  "home.pastSessions": "Querent List",
   "home.unnamedSession": "Unnamed chart",
   "home.loading": "Loading…",
   "home.view": "View",
@@ -329,7 +329,7 @@ const en: Record<string, string> = {
 const zh: Record<string, string> = {
   // Home
   "home.subtitle": "AI 原生占星师工作台",
-  "home.birthData": "新建个案",
+  "home.birthData": "新建问卜者",
   "home.name": "姓名",
   "home.date": "日期",
   "home.timeLocal": "时间（当地）",
@@ -339,7 +339,7 @@ const zh: Record<string, string> = {
   "home.calculating": "正在计算…",
   "home.createChart": "查看星盘",
   "home.sessions": "会话列表",
-  "home.pastSessions": "历史",
+  "home.pastSessions": "问卜者列表",
   "home.unnamedSession": "未命名",
   "home.loading": "加载中…",
   "home.view": "查看",

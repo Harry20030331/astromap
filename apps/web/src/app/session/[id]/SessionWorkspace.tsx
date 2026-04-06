@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { SessionQueryChat } from "@/components/session/SessionQueryChat";
 import { LocaleToggle } from "@/components/LocaleToggle";
@@ -15,16 +15,20 @@ export default function SessionWorkspace({ children }: { children: React.ReactNo
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const queryOpen =
-    searchParams.get("query") === "1" || Boolean(pathname?.replace(/\/$/, "").endsWith("/query"));
-
-  const setQueryOpen = useCallback(
-    (open: boolean) => {
-      const base = `/session/${id}/view`;
-      router.replace(open ? `${base}?query=1` : base, { scroll: false });
-    },
-    [id, router],
+  const [queryOpen, setQueryOpen] = useState(
+    () => searchParams.get("query") === "1" || Boolean(pathname?.replace(/\/$/, "").endsWith("/query")),
   );
+
+  // Keep URL in sync (fire-and-forget, does not drive UI — skip initial mount)
+  const skipUrlSync = useRef(true);
+  useEffect(() => {
+    if (skipUrlSync.current) {
+      skipUrlSync.current = false;
+      return;
+    }
+    const base = `/session/${id}/view`;
+    router.replace(queryOpen ? `${base}?query=1` : base, { scroll: false });
+  }, [queryOpen, id, router]);
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -41,15 +45,20 @@ export default function SessionWorkspace({ children }: { children: React.ReactNo
   // Tracks whether initial position has been set
   const initializedRef = useRef(false);
 
+  // Track: [View (left)] [Query (right)]
+  //   View  (queryOpen=false) → translateX(0)
+  //   Query (queryOpen=true)  → translateX(-w)
+  // 手指从右到左 (dx<0) = 从 View 进入 Query
+  const pos = (w: number) => (queryOpen ? -w : 0);
+
   // Set initial position BEFORE first paint (no flash, no transition)
-  // useLayoutEffect is client-only; suppress the SSR warning intentionally
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useLayoutEffect(() => {
     const el = trackRef.current;
     const wrapper = wrapperRef.current;
     if (!el || !wrapper) return;
     el.style.transition = "none";
-    el.style.transform = `translateX(${queryOpen ? -wrapper.offsetWidth : 0}px)`;
+    el.style.transform = `translateX(${pos(wrapper.offsetWidth)}px)`;
     initializedRef.current = true;
   }, []);
 
@@ -61,7 +70,7 @@ export default function SessionWorkspace({ children }: { children: React.ReactNo
     if (!el || !wrapper) return;
     const w = wrapper.offsetWidth;
     el.style.transition = "transform 0.35s cubic-bezier(0.25, 1, 0.5, 1)";
-    el.style.transform = `translateX(${queryOpen ? -w : 0}px)`;
+    el.style.transform = `translateX(${pos(w)}px)`;
   }, [queryOpen]);
 
   // Gesture handler — runs once, reads queryOpenRef for always-fresh state
@@ -100,15 +109,14 @@ export default function SessionWorkspace({ children }: { children: React.ReactNo
       const w = wrapper.offsetWidth;
       const open = queryOpenRef.current;
 
+      // open=false (View, at 0):   dx>0 橡皮筋；dx<0 有效（滑向 Query）
+      // open=true  (Query, at -w): dx<0 橡皮筋；dx>0 有效（滑回 View）
       let raw: number;
       if (!open && dx > 0) {
-        // View panel edge — rubber band right
         raw = dx * 0.15;
       } else if (open && dx < 0) {
-        // Query panel edge — rubber band left
         raw = -w + dx * 0.15;
       } else {
-        // Valid direction — hard clamp to [-w, 0]
         raw = Math.max(-w, Math.min(0, (open ? -w : 0) + dx));
       }
 
@@ -129,9 +137,11 @@ export default function SessionWorkspace({ children }: { children: React.ReactNo
       track.style.transition = "transform 0.35s cubic-bezier(0.25, 1, 0.5, 1)";
 
       if (!open && dx < -threshold) {
+        // View → 手指从右到左 → Query
         track.style.transform = `translateX(${-w}px)`;
         setQueryOpen(true);
       } else if (open && dx > threshold) {
+        // Query → 手指从左到右 → View
         track.style.transform = `translateX(0px)`;
         setQueryOpen(false);
       } else {
@@ -243,19 +253,17 @@ export default function SessionWorkspace({ children }: { children: React.ReactNo
       </header>
 
       {/* Swipe viewport */}
-      <div ref={wrapperRef} className="relative min-h-0 flex-1 overflow-hidden">
-        {/* Track: 200% wide, both panels side by side */}
+      <div ref={wrapperRef} className="relative min-h-0 flex-1" style={{ overflow: "hidden" }}>
         <div
           ref={trackRef}
-          className="flex h-full w-[200%]"
-          style={{ willChange: "transform" }}
+          style={{ display: "flex", height: "100%", willChange: "transform" }}
         >
-          {/* Panel 0 – View */}
-          <div className="h-full w-1/2 overflow-y-auto overscroll-contain">
+          {/* Panel 0 – View (left, visible at translateX(0)) */}
+          <div style={{ flex: "0 0 100vw", height: "100%", overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain" }}>
             {children}
           </div>
-          {/* Panel 1 – Query: only mount after client hydration to avoid SSR mismatch */}
-          <div className="flex h-full w-1/2 min-h-0 flex-col overflow-hidden">
+          {/* Panel 1 – Query (right, visible at translateX(-w)) */}
+          <div style={{ flex: "0 0 100vw", height: "100%", display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden" }}>
             {mounted && <SessionQueryChat sessionId={id} />}
           </div>
         </div>

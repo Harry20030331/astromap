@@ -220,18 +220,20 @@ export function LandingPage({ onSignIn }: LandingPageProps) {
               Reveal your map
               <span className="ml-2 inline-block transition-transform duration-300 group-hover:translate-x-1">→</span>
             </button>
-            <p className="text-[0.7rem] tracking-wide" style={{ color: "#a8967a" }}>
-              By continuing, you agree to our{" "}
-              <Link
-                href="/privacy"
-                className="underline underline-offset-2 transition-colors hover:text-stone-700"
-              >
-                Privacy Policy
-              </Link>
-            </p>
           </div>
         </div>
       )}
+
+      {/* Fixed bottom privacy notice */}
+      <p className="pointer-events-none fixed bottom-4 left-0 right-0 z-50 text-center text-[0.65rem] tracking-wide" style={{ color: "#a8967a" }}>
+        By continuing, you agree to our{" "}
+        <Link
+          href="/privacy"
+          className="pointer-events-auto underline underline-offset-2 transition-colors hover:text-stone-700"
+        >
+          Privacy Policy
+        </Link>
+      </p>
 
       {/* Sign-in Phase */}
       {phase === "signin" && (
@@ -265,7 +267,7 @@ export function LandingPage({ onSignIn }: LandingPageProps) {
               AstraMap
             </h1>
             <p className="mb-8 text-sm" style={{ color: "#78716c" }}>
-              Sign in to access your birth chart
+              Sign in to access your sessions
             </p>
 
             <button
@@ -296,15 +298,6 @@ export function LandingPage({ onSignIn }: LandingPageProps) {
             >
               ← Back
             </button>
-
-            <p className="mt-4 text-[0.65rem]" style={{ color: "#a8967a" }}>
-              <Link
-                href="/privacy"
-                className="underline underline-offset-2 transition-colors hover:text-stone-700"
-              >
-                Privacy Policy
-              </Link>
-            </p>
           </div>
         </div>
       )}
