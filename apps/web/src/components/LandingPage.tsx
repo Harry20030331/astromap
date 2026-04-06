@@ -32,7 +32,7 @@ export function LandingPage({ onSignIn }: LandingPageProps) {
     <div
       className="relative min-h-screen overflow-hidden"
       style={{
-        background: "linear-gradient(165deg, #fdfcfa 0%, #f5f3f0 45%, #efe9e2 100%)",
+        background: "linear-gradient(160deg, #fdf8f0 0%, #f5f0e8 40%, #ece4d6 100%)",
       }}
     >
       {/* Ambient glow orbs — soft gold wash on light canvas */}
@@ -115,7 +115,7 @@ export function LandingPage({ onSignIn }: LandingPageProps) {
       {/* Hero Phase */}
       {phase === "hero" && (
         <div
-          className="relative z-10 flex min-h-screen flex-col items-center justify-center px-6 text-center"
+          className="relative z-10 flex min-h-screen flex-col items-center justify-center px-5 text-center sm:px-8"
           style={{
             animation: heroLeaving
               ? "hero-fade-out 0.45s cubic-bezier(.4,0,.2,1) forwards"
@@ -124,7 +124,7 @@ export function LandingPage({ onSignIn }: LandingPageProps) {
         >
           {/* Brand lockup: icon + wordmark (app-like, readable on mobile) */}
           <div
-            className="mb-8 flex max-w-[min(100%,20rem)] items-center justify-center gap-3 sm:mb-10 sm:gap-4"
+            className="mb-8 flex w-full max-w-xs items-center justify-center gap-3 sm:mb-10 sm:max-w-sm sm:gap-4"
             style={{
               animation: "hero-fade-in 0.7s 0.1s cubic-bezier(.22,1,.36,1) both",
             }}
@@ -167,7 +167,7 @@ export function LandingPage({ onSignIn }: LandingPageProps) {
 
           {/* Subcopy — two lines: birth / sky, then invitation */}
           <div
-            className="mb-12 flex w-full max-w-[20rem] flex-col items-center gap-3 sm:max-w-[22rem]"
+            className="mb-12 flex w-full max-w-[22rem] flex-col items-center gap-3 sm:max-w-md"
             style={{
               animation: "hero-fade-in 0.7s 0.5s cubic-bezier(.22,1,.36,1) both",
             }}
@@ -193,12 +193,13 @@ export function LandingPage({ onSignIn }: LandingPageProps) {
 
           {/* CTA — intimate invite, not “free trial” */}
           <div
+            className="w-full max-w-[22rem] sm:w-auto"
             style={{ animation: "hero-fade-in 0.7s 0.65s cubic-bezier(.22,1,.36,1) both" }}
           >
             <button
               type="button"
               onClick={handleGetStarted}
-              className="group relative overflow-hidden rounded-full px-8 py-3.5 text-[0.8125rem] font-semibold tracking-[0.18em] uppercase transition-all duration-300 sm:px-10 sm:py-4 sm:text-sm sm:tracking-[0.2em]"
+              className="group relative w-full overflow-hidden rounded-full px-8 py-3.5 text-[0.8125rem] font-semibold tracking-[0.18em] uppercase transition-all duration-300 sm:w-auto sm:px-10 sm:py-4 sm:text-sm sm:tracking-[0.2em]"
               style={{
                 background: "linear-gradient(135deg, #c48a30 0%, #a87028 100%)",
                 color: "#fffefb",
