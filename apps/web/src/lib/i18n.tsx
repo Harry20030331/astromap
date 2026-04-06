@@ -46,6 +46,7 @@ const en: Record<string, string> = {
   "home.view": "View",
   "home.query": "Query",
   "home.noSessions": "No sessions yet",
+  "home.loadSessionsFailed": "Failed to load sessions. Please try again.",
   "home.deleteSessionAria": "Delete session",
   "home.deleteSessionTitle": "Delete this chart?",
   "home.deleteSessionBody":
@@ -55,6 +56,9 @@ const en: Record<string, string> = {
   "home.deleteFailed": "Could not delete. Try again.",
   "home.editSessionAria": "Edit birth data",
   "home.editFailed": "Could not load or remove the old chart. Nothing was changed.",
+  "home.signOutTitle": "Sign out?",
+  "home.signOutBody": "You'll need to sign in again to access your sessions.",
+  "home.signOutConfirm": "Sign out",
 
   // Session workspace
   "session.backToSessions": "Back to home",
@@ -340,6 +344,7 @@ const zh: Record<string, string> = {
   "home.view": "查看",
   "home.query": "问答",
   "home.noSessions": "暂无会话",
+  "home.loadSessionsFailed": "加载会话失败，请稍后重试。",
   "home.deleteSessionAria": "删除会话",
   "home.deleteSessionTitle": "删除这张星盘？",
   "home.deleteSessionBody":
@@ -349,6 +354,9 @@ const zh: Record<string, string> = {
   "home.deleteFailed": "删除失败，请重试。",
   "home.editSessionAria": "编辑出生信息",
   "home.editFailed": "无法载入或移除旧星盘，未做任何更改。",
+  "home.signOutTitle": "确定退出登录？",
+  "home.signOutBody": "退出后需要重新登录才能访问你的会话。",
+  "home.signOutConfirm": "退出登录",
 
   // Session workspace
   "session.backToSessions": "返回首页",

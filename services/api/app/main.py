@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import httpx
-from fastapi import BackgroundTasks, FastAPI, File, HTTPException, UploadFile
+from fastapi import BackgroundTasks, Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -24,12 +24,13 @@ from app.astro.features import (
     MAJOR_ASPECTS,
     extract_features,
 )
+from app.auth import get_current_user_id
 from app.config import CORS_ORIGINS, GEONAMES_USERNAME, WHISPER_MAX_BYTES
 from app.geo.geonames import MAX_QUERY_LEN, MIN_QUERY_LEN, search_cities, timezone_at_coords
 from app.llm import query as query_llm
 from app.llm import themes as themes_llm
 from app.llm import transcribe as transcribe_llm
-from app.storage import local_json as store
+from app.storage import supabase_store as store
 
 app = FastAPI(title="AstraMap API", version="0.1.0")
 
@@ -133,26 +134,26 @@ def _themes_generating_response() -> dict[str, Any]:
     }
 
 
-def _run_themes_job(session_id: str) -> None:
+def _run_themes_job(session_id: str, user_id: str) -> None:
     """Background: compute themes from features and persist (idempotent if already saved)."""
     try:
-        rec = store.get_session(session_id)
+        rec = store.get_session(session_id, user_id)
         if not rec:
             return
         if _themes_nonempty(rec.get("themes")):
             rec["themes_status"] = "ready"
-            store.save_session(rec)
+            store.save_session(rec, user_id)
             return
         features = _compute_effective_features(rec)
         themes_payload = themes_llm.generate_themes(features)
     except Exception:
-        rec = store.get_session(session_id)
+        rec = store.get_session(session_id, user_id)
         if rec:
             rec["themes_status"] = "failed"
-            store.save_session(rec)
+            store.save_session(rec, user_id)
         return
 
-    rec = store.get_session(session_id)
+    rec = store.get_session(session_id, user_id)
     if not rec:
         return
     if _themes_nonempty(rec.get("themes")):
@@ -163,7 +164,7 @@ def _run_themes_job(session_id: str) -> None:
     }
     rec["themes_status"] = "ready"
     rec["features"] = features
-    store.save_session(rec)
+    store.save_session(rec, user_id)
 
 
 def _parse_birth(create: BirthCreate) -> BirthInput:
@@ -267,12 +268,16 @@ def geo_timezone(lat: float, lng: float) -> dict[str, str]:
 
 
 @app.get("/sessions")
-def list_sessions() -> dict[str, Any]:
-    return {"sessions": store.list_session_summaries()}
+def list_sessions(user_id: str = Depends(get_current_user_id)) -> dict[str, Any]:
+    return {"sessions": store.list_session_summaries(user_id)}
 
 
 @app.post("/sessions")
-def create_session(body: BirthCreate, background_tasks: BackgroundTasks) -> dict[str, Any]:
+def create_session(
+    body: BirthCreate,
+    background_tasks: BackgroundTasks,
+    user_id: str = Depends(get_current_user_id),
+) -> dict[str, Any]:
     birth_in = _parse_birth(body)
     chart = compute_natal(birth_in)
     features = extract_features(
@@ -306,9 +311,10 @@ def create_session(body: BirthCreate, background_tasks: BackgroundTasks) -> dict
             "themes": None,
             "themes_status": "generating",
             "queries": [],
-        }
+        },
+        user_id,
     )
-    background_tasks.add_task(_run_themes_job, record["id"])
+    background_tasks.add_task(_run_themes_job, record["id"], user_id)
     return {
         "session_id": record["id"],
         "birth": birth_record,
@@ -318,8 +324,11 @@ def create_session(body: BirthCreate, background_tasks: BackgroundTasks) -> dict
 
 
 @app.get("/sessions/{session_id}")
-def get_session(session_id: str) -> dict[str, Any]:
-    rec = store.get_session(session_id)
+def get_session(
+    session_id: str,
+    user_id: str = Depends(get_current_user_id),
+) -> dict[str, Any]:
+    rec = store.get_session(session_id, user_id)
     if not rec:
         raise HTTPException(status_code=404, detail="session not found")
     out = dict(rec)
@@ -328,8 +337,11 @@ def get_session(session_id: str) -> dict[str, Any]:
 
 
 @app.delete("/sessions/{session_id}", status_code=204)
-def delete_session(session_id: str) -> Response:
-    if not store.delete_session(session_id):
+def delete_session(
+    session_id: str,
+    user_id: str = Depends(get_current_user_id),
+) -> Response:
+    if not store.delete_session(session_id, user_id):
         raise HTTPException(status_code=404, detail="session not found")
     return Response(status_code=204)
 
@@ -339,8 +351,9 @@ def patch_analysis_preferences(
     session_id: str,
     body: AnalysisPreferencesBody,
     background_tasks: BackgroundTasks,
+    user_id: str = Depends(get_current_user_id),
 ) -> dict[str, Any]:
-    rec = store.get_session(session_id)
+    rec = store.get_session(session_id, user_id)
     if not rec:
         raise HTTPException(status_code=404, detail="session not found")
     normalized = _normalize_analysis_preferences(body)
@@ -353,8 +366,8 @@ def patch_analysis_preferences(
     )
     rec["themes"] = None
     rec["themes_status"] = "generating"
-    store.save_session(rec)
-    background_tasks.add_task(_run_themes_job, session_id)
+    store.save_session(rec, user_id)
+    background_tasks.add_task(_run_themes_job, session_id, user_id)
     return {
         "analysis_preferences": normalized,
         "features": rec["features"],
@@ -367,8 +380,9 @@ def post_themes(
     session_id: str,
     background_tasks: BackgroundTasks,
     body: ThemesPostBody = ThemesPostBody(),
+    user_id: str = Depends(get_current_user_id),
 ) -> dict[str, Any]:
-    rec = store.get_session(session_id)
+    rec = store.get_session(session_id, user_id)
     if not rec:
         raise HTTPException(status_code=404, detail="session not found")
 
@@ -380,14 +394,14 @@ def post_themes(
 
     if not body.force and rec.get("themes_status") == "failed":
         rec["themes_status"] = "generating"
-        store.save_session(rec)
-        background_tasks.add_task(_run_themes_job, session_id)
+        store.save_session(rec, user_id)
+        background_tasks.add_task(_run_themes_job, session_id, user_id)
         return _themes_generating_response()
 
     if not body.force and rec.get("themes_status") is None and not _themes_nonempty(rec.get("themes")):
         rec["themes_status"] = "generating"
-        store.save_session(rec)
-        background_tasks.add_task(_run_themes_job, session_id)
+        store.save_session(rec, user_id)
+        background_tasks.add_task(_run_themes_job, session_id, user_id)
         return _themes_generating_response()
 
     try:
@@ -404,14 +418,18 @@ def post_themes(
     }
     rec["themes_status"] = "ready"
     rec["features"] = eff
-    store.save_session(rec)
+    store.save_session(rec, user_id)
     return rec["themes"]
 
 
 @app.post("/sessions/{session_id}/transcribe")
-async def post_transcribe(session_id: str, file: UploadFile = File(...)) -> dict[str, str]:
+async def post_transcribe(
+    session_id: str,
+    file: UploadFile = File(...),
+    user_id: str = Depends(get_current_user_id),
+) -> dict[str, str]:
     """Transcribe uploaded audio via OpenAI Whisper (same API key as chat)."""
-    rec = store.get_session(session_id)
+    rec = store.get_session(session_id, user_id)
     if not rec:
         raise HTTPException(status_code=404, detail="session not found")
 
@@ -431,8 +449,12 @@ async def post_transcribe(session_id: str, file: UploadFile = File(...)) -> dict
 
 
 @app.post("/sessions/{session_id}/query")
-def post_query(session_id: str, body: QueryBody) -> dict[str, Any]:
-    rec = store.get_session(session_id)
+def post_query(
+    session_id: str,
+    body: QueryBody,
+    user_id: str = Depends(get_current_user_id),
+) -> dict[str, Any]:
+    rec = store.get_session(session_id, user_id)
     if not rec:
         raise HTTPException(status_code=404, detail="session not found")
     features = _compute_effective_features(rec)
@@ -452,14 +474,18 @@ def post_query(session_id: str, body: QueryBody) -> dict[str, Any]:
         "ts": datetime.now(UTC).isoformat(),
     }
     rec.setdefault("queries", []).append(entry)
-    store.save_session(rec)
+    store.save_session(rec, user_id)
     return response
 
 
 @app.post("/sessions/{session_id}/query/stream")
-def post_query_stream(session_id: str, body: QueryBody) -> StreamingResponse:
+def post_query_stream(
+    session_id: str,
+    body: QueryBody,
+    user_id: str = Depends(get_current_user_id),
+) -> StreamingResponse:
     """Same inputs as /query; streams markdown chunks via SSE, then saves parsed result."""
-    rec = store.get_session(session_id)
+    rec = store.get_session(session_id, user_id)
     if not rec:
         raise HTTPException(status_code=404, detail="session not found")
     features = _compute_effective_features(rec)
@@ -481,10 +507,9 @@ def post_query_stream(session_id: str, body: QueryBody) -> StreamingResponse:
                 "ts": datetime.now(UTC).isoformat(),
             }
             rec.setdefault("queries", []).append(entry)
-            # Persist per-structure interpretations so the frontend can read them back
             if response.get("structure_details"):
                 rec.setdefault("structure_interpretations", {}).update(response["structure_details"])
-            store.save_session(rec)
+            store.save_session(rec, user_id)
             yield f"data: {json.dumps({'type': 'complete', 'response': response})}\n\n"
         except RuntimeError as e:
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
@@ -503,9 +528,13 @@ def post_query_stream(session_id: str, body: QueryBody) -> StreamingResponse:
 
 
 @app.post("/sessions/{session_id}/structure/stream")
-def post_structure_stream(session_id: str, body: StructureBody) -> StreamingResponse:
+def post_structure_stream(
+    session_id: str,
+    body: StructureBody,
+    user_id: str = Depends(get_current_user_id),
+) -> StreamingResponse:
     """Stream a focused prose interpretation of one specific chart structure."""
-    rec = store.get_session(session_id)
+    rec = store.get_session(session_id, user_id)
     if not rec:
         raise HTTPException(status_code=404, detail="session not found")
     features = _compute_effective_features(rec)
@@ -519,7 +548,7 @@ def post_structure_stream(session_id: str, body: StructureBody) -> StreamingResp
                 yield f"data: {json.dumps({'type': 'delta', 'content': token})}\n\n"
             full_text = "".join(pieces)
             rec.setdefault("structure_interpretations", {})[body.structure] = full_text
-            store.save_session(rec)
+            store.save_session(rec, user_id)
             yield f"data: {json.dumps({'type': 'complete'})}\n\n"
         except RuntimeError as e:
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"

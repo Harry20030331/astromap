@@ -1,0 +1,33 @@
+# Render Blueprint: https://render.com/docs/blueprint-spec
+# After connecting the repo: Dashboard → New → Blueprint → select this file.
+# Set secret env vars in the Render dashboard (OPENAI_API_KEY, SUPABASE_SERVICE_KEY, etc.).
+version: "1"
+services:
+  - type: web
+    name: astramap-api
+    runtime: python
+    plan: free
+    region: singapore
+    rootDir: services/api
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.8"
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: OPENAI_WHISPER_MODEL
+        value: whisper-1
+      # Set in dashboard (do not commit secrets):
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      # Comma-separated; include your Vercel production URL(s), e.g. https://astramap.app
+      - key: CORS_ORIGINS
+        sync: false
+      - key: GEONAMES_USERNAME
+        sync: false

@@ -10,8 +10,10 @@ import {
 } from "@/components/BirthPlacePicker";
 import { LogoStar } from "@/components/LogoStar";
 import { LocaleToggle } from "@/components/LocaleToggle";
+import { AuthModal } from "@/components/AuthModal";
 import { apiDelete, apiGet, apiPost } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { useAuth } from "@/app/providers";
 
 type SessionSummary = { id: string; label: string; created_at: string | null };
 
@@ -82,6 +84,7 @@ function PencilIcon({ className }: { className?: string }) {
 
 export default function HomePage() {
   const { t } = useI18n();
+  const { session, loading: authLoading, signInWithGoogle, signOut } = useAuth();
   const qc = useQueryClient();
   const [name, setName] = useState("");
   const [birthDate, setBirthDate] = useState("2000-01-01");
@@ -103,10 +106,12 @@ export default function HomePage() {
 
   const [pendingDelete, setPendingDelete] = useState<SessionSummary | null>(null);
   const [deleteErr, setDeleteErr] = useState<string | null>(null);
+  const [pendingSignOut, setPendingSignOut] = useState(false);
 
-  const { data: listData, isLoading } = useQuery({
-    queryKey: ["sessions"],
+  const { data: listData, isLoading, isError: isSessionsError } = useQuery({
+    queryKey: ["sessions", session?.user?.id],
     queryFn: () => apiGet<{ sessions: SessionSummary[] }>("/sessions"),
+    enabled: !!session,
   });
 
   useEffect(() => {
@@ -190,6 +195,18 @@ export default function HomePage() {
   const sessionLabel = (s: SessionSummary) =>
     s.label?.trim() ? s.label : t("home.unnamedSession");
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-950">
+        <p className="text-slate-400 text-sm">Loading…</p>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <AuthModal onSignIn={signInWithGoogle} />;
+  }
+
   return (
     <main className="mx-auto flex min-h-full w-full max-w-lg flex-col gap-8 px-4 py-8">
       {pendingDelete ? (
@@ -248,6 +265,52 @@ export default function HomePage() {
         </div>
       ) : null}
 
+      {pendingSignOut ? (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="signout-dialog-title"
+        >
+          <button
+            type="button"
+            className="absolute inset-0 bg-stone-900/40 backdrop-blur-[1px]"
+            aria-label={t("home.cancel")}
+            onClick={() => setPendingSignOut(false)}
+          />
+          <div className="relative z-10 w-full max-w-sm rounded-xl border border-stone-200/90 bg-[var(--surface)] p-4 shadow-xl shadow-stone-300/40">
+            <h2
+              id="signout-dialog-title"
+              className="text-base font-semibold text-stone-900"
+            >
+              {t("home.signOutTitle")}
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-stone-600">
+              {t("home.signOutBody")}
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                className="rounded-lg border border-stone-200 bg-[var(--surface)] px-3 py-2 text-sm font-medium text-stone-800 transition-colors hover:bg-stone-50"
+                onClick={() => setPendingSignOut(false)}
+              >
+                {t("home.cancel")}
+              </button>
+              <button
+                type="button"
+                className="rounded-lg bg-stone-800 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-stone-900"
+                onClick={() => {
+                  setPendingSignOut(false);
+                  signOut();
+                }}
+              >
+                {t("home.signOutConfirm")}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <header className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <div className="flex min-w-0 items-center gap-1">
@@ -282,6 +345,30 @@ export default function HomePage() {
             >
               <circle cx="12" cy="12" r="10" />
               <polyline points="12 6 12 12 16 14" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            className="inline-flex items-center justify-center rounded-lg border border-stone-200/90 bg-[var(--surface)] p-2 text-stone-500 shadow-sm shadow-stone-100/60 transition-colors hover:border-stone-300 hover:bg-stone-50/90 hover:text-stone-800"
+            aria-label="Sign out"
+            title="Sign out"
+            onClick={() => setPendingSignOut(true)}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" x2="9" y1="12" y2="12" />
             </svg>
           </button>
         </div>
@@ -325,6 +412,10 @@ export default function HomePage() {
             {isLoading ? (
               <p className="px-4 py-6 text-center text-sm text-stone-500">
                 {t("home.loading")}
+              </p>
+            ) : isSessionsError ? (
+              <p className="px-4 py-6 text-center text-sm text-red-600">
+                {t("home.loadSessionsFailed")}
               </p>
             ) : sessions.length === 0 ? (
               <p className="px-4 py-6 text-center text-sm text-stone-500">

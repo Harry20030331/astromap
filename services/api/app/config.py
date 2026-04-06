@@ -15,13 +15,23 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 OPENAI_WHISPER_MODEL = os.getenv("OPENAI_WHISPER_MODEL", "whisper-1")
 
+SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
+
 # Optional: GeoNames username for /geo/* (city search, timezone from lat/lng)
 GEONAMES_USERNAME = os.getenv("GEONAMES_USERNAME", "").strip()
 
 # Whisper API max upload (OpenAI limit is 25 MB for this endpoint)
 WHISPER_MAX_BYTES = 25 * 1024 * 1024
 
+_extra_origins = [
+    o.strip()
+    for o in os.getenv("CORS_ORIGINS", "").split(",")
+    if o.strip()
+]
+
 CORS_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    *_extra_origins,
 ]
