@@ -68,10 +68,6 @@ Open http://localhost:3000
 
 [`apps/web/vercel.json`](apps/web/vercel.json) includes `ignoreCommand` so a deploy is **skipped** when the latest commit did not change anything under `apps/web`. Remove that field if you want every push to build the web app.
 
-### Automatic deploys
-
-Pushes to the default production branch (usually `main`) trigger Vercel production and (if connected) Render builds. Other branches / PRs typically get Vercel preview URLs.
-
 ## Pre-launch checklist
 
 - [ ] Render: API env vars set; `/health` passes.
@@ -80,7 +76,3 @@ Pushes to the default production branch (usually `main`) trigger Vercel producti
 - [ ] `CORS_ORIGINS` includes every browser origin users hit.
 - [ ] (Optional) Google Search Console: keep `apps/web/public/google*.html` if used for verification.
 - [ ] Favicons: `apps/web/src/app/icon.png` and `apple-icon.png` committed and redeployed.
-
-## Optional: Vercel CLI
-
-From `apps/web`, after `npx vercel login`, you can run `npx vercel --prod`. Prefer Git-based deploys to avoid double-deploying the same commit.
