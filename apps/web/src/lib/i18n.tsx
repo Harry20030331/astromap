@@ -159,7 +159,7 @@ const en: Record<string, string> = {
 
   // Session query / chat
   "chat.clearConversation": "Clear conversation",
-  "chat.placeholder": "What's on your mind about this chart?",
+  "chat.placeholder": "Ask about this chart…",
   "chat.stopRecording": "Stop recording",
   "chat.voiceInput": "Voice input",
   "chat.send": "Send",
@@ -168,6 +168,7 @@ const en: Record<string, string> = {
   "chat.chartStructures": "Chart Structures",
   "chat.interpretation": "Interpretation",
   "chat.suggestedFollowups": "Suggested Follow-ups",
+  "chat.suggestionChips": "Quick prompts",
   "chat.chipChartOverview": "Chart & Overview",
   "chat.chipLifeDirection": "Life & Direction",
   "chat.chipLoveRelationships": "Love & Relationships",
@@ -457,7 +458,7 @@ const zh: Record<string, string> = {
 
   // Session query / chat
   "chat.clearConversation": "清除对话",
-  "chat.placeholder": "关于这张星盘，你想问什么？",
+  "chat.placeholder": "向星盘提问…",
   "chat.stopRecording": "停止录音",
   "chat.voiceInput": "语音输入",
   "chat.send": "发送",
@@ -466,6 +467,7 @@ const zh: Record<string, string> = {
   "chat.chartStructures": "星盘结构",
   "chat.interpretation": "解读",
   "chat.suggestedFollowups": "推荐追问",
+  "chat.suggestionChips": "快捷提问",
   "chat.chipChartOverview": "星盘概览",
   "chat.chipLifeDirection": "人生方向",
   "chat.chipLoveRelationships": "感情与关系",

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { LogoStar } from "@/components/LogoStar";
 
@@ -219,6 +220,15 @@ export function LandingPage({ onSignIn }: LandingPageProps) {
               Reveal your map
               <span className="ml-2 inline-block transition-transform duration-300 group-hover:translate-x-1">→</span>
             </button>
+            <p className="text-[0.7rem] tracking-wide" style={{ color: "#a8967a" }}>
+              By continuing, you agree to our{" "}
+              <Link
+                href="/privacy"
+                className="underline underline-offset-2 transition-colors hover:text-stone-700"
+              >
+                Privacy Policy
+              </Link>
+            </p>
           </div>
         </div>
       )}
@@ -286,6 +296,15 @@ export function LandingPage({ onSignIn }: LandingPageProps) {
             >
               ← Back
             </button>
+
+            <p className="mt-4 text-[0.65rem]" style={{ color: "#a8967a" }}>
+              <Link
+                href="/privacy"
+                className="underline underline-offset-2 transition-colors hover:text-stone-700"
+              >
+                Privacy Policy
+              </Link>
+            </p>
           </div>
         </div>
       )}

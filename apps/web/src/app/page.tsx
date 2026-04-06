@@ -208,7 +208,7 @@ export default function HomePage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-full w-full max-w-lg flex-col gap-8 px-4 py-8">
+    <main className="mx-auto flex min-h-full w-full max-w-lg flex-col gap-12 px-4 pb-10 pt-20">
       {pendingDelete ? (
         <div
           className="fixed inset-0 z-[200] flex items-center justify-center p-4"
@@ -315,7 +315,16 @@ export default function HomePage() {
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <div className="flex min-w-0 items-center gap-1">
             <LogoStar size={36} className="shrink-0" />
-            <h1 className="min-w-0 text-3xl font-semibold leading-tight tracking-tight text-stone-900">
+            <h1
+              className="min-w-0 text-3xl font-light italic leading-none tracking-[0.08em]"
+              style={{
+                fontFamily:
+                  "Palatino, 'Palatino Linotype', Georgia, 'Book Antiqua', serif",
+                color: "#292524",
+                textShadow:
+                  "0 1px 0 rgba(255,255,255,0.85), 0 0 28px rgba(196,138,48,0.12)",
+              }}
+            >
               AstraMap
             </h1>
           </div>

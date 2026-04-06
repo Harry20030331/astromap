@@ -293,8 +293,8 @@ function AspectCell({
         aria-label={aspectLabel}
       >
         <span className="text-sm leading-none">{aspectGlyph(p.kind)}</span>
-        {hasOrb ? (
-          <span className="mt-0.5 text-[8px] font-normal tabular-nums leading-none opacity-80">
+        {hasOrb && activeMiddle ? (
+          <span className="mt-0.5 text-[8px] font-normal tabular-nums leading-none opacity-90">
             {formatDegMin(Math.abs(orb!))}
           </span>
         ) : null}

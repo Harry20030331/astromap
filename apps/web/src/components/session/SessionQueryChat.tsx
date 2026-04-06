@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { apiGet, apiPostFormData } from "@/lib/api";
+import { apiGet, apiPostFormData, authHeaders } from "@/lib/api";
 import { API_URL } from "@/lib/config";
 import { LogoStar } from "@/components/LogoStar";
 import { useI18n } from "@/lib/i18n";
@@ -264,9 +264,10 @@ export function SessionQueryChat({ sessionId }: { sessionId: string }) {
         };
 
         try {
+          const auth = await authHeaders();
           const res = await fetch(`${API_URL}/sessions/${sessionId}/query/stream`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", ...auth },
             body: JSON.stringify({ text: trimmed, locale }),
           });
           if (!res.ok) {
@@ -442,17 +443,20 @@ export function SessionQueryChat({ sessionId }: { sessionId: string }) {
         <div ref={bottomRef} />
       </div>
 
-      {/* Input area */}
-      <div className="shrink-0 border-t border-stone-200/70 bg-[var(--background)] px-3 pb-4 pt-2">
-        {/* Suggestion chips */}
-        <div className="mb-2 flex flex-wrap justify-center gap-2 py-1 sm:justify-start">
-          {SUGGESTION_CHIPS.slice(0, 4).map((chip) => (
+      {/* Input area: mobile = 3 chips (no Chart overview, no scroll); sm+ = 4 chips */}
+      <div className="shrink-0 border-t border-stone-200/70 bg-[var(--background)] pb-4 pt-2">
+        <div
+          className="mb-2 flex flex-nowrap items-center justify-center gap-1.5 py-1 pl-2 pr-2 sm:justify-start sm:gap-2 sm:pl-3 sm:pr-3"
+          role="group"
+          aria-label={t("chat.suggestionChips")}
+        >
+          {SUGGESTION_CHIPS.slice(0, 4).map((chip, idx) => (
             <button
               key={chip.labelKey}
               type="button"
               disabled={queryPending}
               onClick={() => sendQuery(chip.query)}
-              className="shrink-0 rounded-full border border-stone-200 bg-stone-50 px-3 py-1.5 text-xs text-stone-700 transition-colors hover:border-stone-300 hover:bg-stone-100 disabled:opacity-50"
+              className={`shrink-0 rounded-full border border-stone-200 bg-stone-50 px-2.5 py-1 text-[11px] leading-tight text-stone-700 transition-colors hover:border-stone-300 hover:bg-stone-100 disabled:opacity-50 sm:px-3 sm:text-xs${idx === 0 ? " hidden sm:inline-flex" : ""}`}
             >
               {t(chip.labelKey)}
             </button>
@@ -460,7 +464,7 @@ export function SessionQueryChat({ sessionId }: { sessionId: string }) {
         </div>
 
         {/* Input row */}
-        <div className="flex items-end gap-2">
+        <div className="flex items-end gap-2 pl-4 pr-8">
           <textarea
             ref={textareaRef}
             rows={1}

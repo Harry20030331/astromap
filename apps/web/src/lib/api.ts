@@ -6,7 +6,7 @@
 import { API_URL } from "./config";
 import { supabase } from "./supabaseClient";
 
-async function authHeaders(): Promise<Record<string, string>> {
+export async function authHeaders(): Promise<Record<string, string>> {
   if (!supabase) return {};
   const {
     data: { session },
