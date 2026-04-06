@@ -10,7 +10,7 @@ import {
 } from "@/components/BirthPlacePicker";
 import { LogoStar } from "@/components/LogoStar";
 import { LocaleToggle } from "@/components/LocaleToggle";
-import { AuthModal } from "@/components/AuthModal";
+import { LandingPage } from "@/components/LandingPage";
 import { apiDelete, apiGet, apiPost } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/app/providers";
@@ -204,7 +204,7 @@ export default function HomePage() {
   }
 
   if (!session) {
-    return <AuthModal onSignIn={signInWithGoogle} />;
+    return <LandingPage onSignIn={signInWithGoogle} />;
   }
 
   return (

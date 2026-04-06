@@ -58,6 +58,19 @@ Repository root includes [`render.yaml`](render.yaml) for a **Render Blueprint**
    - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (see `apps/web/.env.example`)
 4. **Domains** → add `astramap.app` (DNS: Vercel will show A/CNAME records for Namecheap).
 
+#### Automatic deploys from Git
+
+After the repo is connected, Vercel deploys on its own:
+
+| Event | What happens |
+|-------|----------------|
+| Push to **Production Branch** (default `main`) | New **production** deployment |
+| Push to other branches / open or update a PR | **Preview** deployment (unique URL per branch/PR) |
+
+Check **Project → Settings → Git**: confirm **Connected Git Repository**, **Production Branch** (`main` or your default), and that automatic deployments are not disabled.
+
+This repo includes [`apps/web/vercel.json`](apps/web/vercel.json): `npm ci` for installs, and `ignoreCommand` so a deploy is **skipped** when the latest commit did not change anything under `apps/web` (e.g. only `services/api` changed). Remove `ignoreCommand` there if you want every push to trigger a web build anyway.
+
 ### CLI (optional)
 
-From `apps/web`, after logging in: `npx vercel login` then `npx vercel --prod` (still set env vars in the Vercel project dashboard).
+From `apps/web`, after logging in: `npx vercel login` then `npx vercel --prod` (still set env vars in the Vercel project dashboard). Prefer **Git-based deploys** above so you do not double-deploy with the CLI on the same commit.
