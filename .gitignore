@@ -1,8 +1,9 @@
-# Local reference clones (not part of the product)
-reference/AstrologerStudio/
+# Local reference clones (optional; never commit third-party trees)
+reference/
 
-# data
+# Session JSON and other local data (production uses Supabase)
 data/
+services/data/
 
 # env
 .env
