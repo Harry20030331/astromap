@@ -193,8 +193,11 @@ def run_query_stream(
     aspects_shortlist: list[str],
     *,
     locale: str | None = None,
-) -> Iterator[str]:
-    """Stream markdown tokens; caller parses full text with parse_query_markdown."""
+) -> tuple[str, str, Iterator[str]]:
+    """Build prompts and stream markdown tokens; caller parses full text with parse_query_markdown.
+
+    Returns (system_prompt, user_prompt, token_iterator).
+    """
     if not OPENAI_API_KEY:
         raise RuntimeError("OPENAI_API_KEY is not set")
 
@@ -219,8 +222,12 @@ def run_query_stream(
         temperature=0.6,
         stream=True,
     )
-    for chunk in stream:
-        choice = chunk.choices[0] if chunk.choices else None
-        if not choice or not choice.delta.content:
-            continue
-        yield choice.delta.content
+
+    def token_iter() -> Iterator[str]:
+        for chunk in stream:
+            choice = chunk.choices[0] if chunk.choices else None
+            if not choice or not choice.delta.content:
+                continue
+            yield choice.delta.content
+
+    return system, user_content, token_iter()

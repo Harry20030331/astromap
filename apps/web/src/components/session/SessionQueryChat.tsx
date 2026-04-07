@@ -36,7 +36,14 @@ type ChatMessage = {
 
 type SseEvent =
   | { type: "delta"; content: string }
-  | { type: "complete"; response: QueryResponse }
+  | {
+      type: "complete";
+      response: QueryResponse;
+      model?: string;
+      system_prompt?: string;
+      user_prompt?: string;
+      raw_output?: string;
+    }
   | { type: "error"; message: string };
 
 function parseSseBuffer(buffer: string): { events: SseEvent[]; rest: string } {
@@ -257,6 +264,14 @@ export function SessionQueryChat({
                 ),
               );
             } else if (ev.type === "complete") {
+              console.groupCollapsed(
+                "[aiastrology] /query/stream — model, prompts, raw output",
+              );
+              console.info("model:", ev.model ?? "(not reported; redeploy API)");
+              console.info("system_prompt:\n", ev.system_prompt ?? "(missing)");
+              console.info("user_prompt:\n", ev.user_prompt ?? "(missing)");
+              console.info("raw_output (model text):\n", ev.raw_output ?? "(missing)");
+              console.groupEnd();
               setErr(null);
               setMessages((prev) =>
                 prev.map((m) =>
