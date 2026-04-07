@@ -25,7 +25,7 @@ from app.astro.features import (
     extract_features,
 )
 from app.auth import get_current_user_id
-from app.config import CORS_ORIGINS, GEONAMES_USERNAME, OPENAI_MODEL, WHISPER_MAX_BYTES
+from app.config import CORS_ORIGINS, GEONAMES_USERNAME, WHISPER_MAX_BYTES
 from app.geo.geonames import MAX_QUERY_LEN, MIN_QUERY_LEN, search_cities, timezone_at_coords
 from app.llm import query as query_llm
 from app.llm import themes as themes_llm
@@ -494,10 +494,9 @@ def post_query_stream(
     def event_generator():
         pieces: list[str] = []
         try:
-            system_prompt, user_prompt, token_iter = query_llm.run_query_stream(
+            for token in query_llm.run_query_stream(
                 features, body.text, aspects_short, locale=body.locale
-            )
-            for token in token_iter:
+            ):
                 pieces.append(token)
                 yield f"data: {json.dumps({'type': 'delta', 'content': token})}\n\n"
             md = "".join(pieces)
@@ -511,7 +510,7 @@ def post_query_stream(
             if response.get("structure_details"):
                 rec.setdefault("structure_interpretations", {}).update(response["structure_details"])
             store.save_session(rec, user_id)
-            yield f"data: {json.dumps({'type': 'complete', 'response': response, 'model': OPENAI_MODEL, 'system_prompt': system_prompt, 'user_prompt': user_prompt, 'raw_output': md}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'complete', 'response': response})}\n\n"
         except RuntimeError as e:
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
         except Exception as e:
