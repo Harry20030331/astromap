@@ -8,12 +8,12 @@ import { LogoStar } from "@/components/LogoStar";
 import { useI18n } from "@/lib/i18n";
 
 const SUGGESTION_CHIPS = [
-  { labelKey: "chat.chipChartOverview", query: "Chart & Overview" },
-  { labelKey: "chat.chipLifeDirection", query: "Life & Direction" },
-  { labelKey: "chat.chipLoveRelationships", query: "Love & Relationships" },
-  { labelKey: "chat.chipCareerAmbition", query: "Career & Ambition" },
-  { labelKey: "chat.chipFamilyHome", query: "Family & Home" },
-  { labelKey: "chat.chipStrengthsChallenges", query: "Strengths & Challenges" },
+  { labelKey: "chat.chipChartOverview" },
+  { labelKey: "chat.chipLifeDirection" },
+  { labelKey: "chat.chipLoveRelationships" },
+  { labelKey: "chat.chipCareerAmbition" },
+  { labelKey: "chat.chipFamilyHome" },
+  { labelKey: "chat.chipStrengthsChallenges" },
 ];
 
 type QueryResponse = {
@@ -463,7 +463,7 @@ export function SessionQueryChat({
               key={chip.labelKey}
               type="button"
               disabled={queryPending}
-              onClick={() => sendQuery(chip.query)}
+              onClick={() => sendQuery(t(chip.labelKey))}
               className={`shrink-0 rounded-full border border-stone-200 bg-stone-50 px-2.5 py-1 text-[11px] leading-tight text-stone-700 transition-colors hover:border-stone-300 hover:bg-stone-100 disabled:opacity-50 sm:px-3 sm:text-xs${idx === 0 ? " hidden sm:inline-flex" : ""}`}
             >
               {t(chip.labelKey)}

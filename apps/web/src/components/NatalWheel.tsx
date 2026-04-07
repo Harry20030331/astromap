@@ -585,50 +585,24 @@ export function NatalWheel({
   };
 
   return (
-    <div className="natal-wheel w-full">
-      <div>
+    <div className="natal-wheel w-full overflow-visible">
+      <div className="overflow-visible">
         <svg
           viewBox={`0 0 ${VB} ${VB}`}
-          className="block h-auto w-full"
+          className="block h-auto w-full overflow-visible"
           role="img"
           aria-label={t("wheel.ariaLabel")}
-          style={{ filter: "drop-shadow(0 1px 4px rgba(90,70,30,0.12))" }}
+          overflow="visible"
+          style={{
+            overflow: "visible",
+            filter: "drop-shadow(0 1px 4px rgba(90,70,30,0.12))",
+          }}
         >
-          <defs>
-            <filter id="ragged-edge" x="-6%" y="-6%" width="112%" height="112%">
-              <feTurbulence
-                type="turbulence"
-                baseFrequency="0.022"
-                numOctaves="6"
-                seed="7"
-                result="warp"
-              />
-              <feDisplacementMap
-                in="SourceGraphic"
-                in2="warp"
-                scale="28"
-                xChannelSelector="R"
-                yChannelSelector="G"
-              />
-            </filter>
-            <mask id="parch-mask">
-              <rect
-                x="10"
-                y="10"
-                width={VB - 20}
-                height={VB - 20}
-                rx="2"
-                fill="white"
-                filter="url(#ragged-edge)"
-              />
-            </mask>
-          </defs>
-          <g mask="url(#parch-mask)">
           <g
-            transform={`translate(${CX} ${CY}) scale(${PARCH_TEXTURE_SCALE}) translate(${-CX} ${-CY})`}
+            transform={`translate(${CX} ${CY}) scale(${SUBSTRATE_TEXTURE_SCALE}) translate(${-CX} ${-CY})`}
           >
             <image
-              href="/images/parchment.png"
+              href="/images/parchment_substrate.png"
               x="0"
               y="0"
               width={VB}
@@ -849,7 +823,6 @@ export function NatalWheel({
             }),
           )}
           </g>
-          </g>
         </svg>
       </div>
       {modal}
@@ -861,11 +834,11 @@ export function NatalWheel({
 const VB = 540;
 const CX = VB / 2;
 const CY = VB / 2;
-/** >1 zooms parchment bitmap only (center-fixed); wheel geometry unchanged. */
-const PARCH_TEXTURE_SCALE = 1.02;
-/** Scale factor for wheel geometry only (parchment unchanged), centered on canvas.
- *  Keep R_ZOD_OUT * this + label margin ≤ VB/2 − maskInset (mask rect uses 10px inset). */
-const WHEEL_CONTENT_SCALE = 1.0;
+/** >1 zooms substrate bitmap only (center-fixed); wheel geometry unchanged.
+ *  Requires `overflow: visible` on the SVG — otherwise the viewBox clips to a square and scaling only “hits” an invisible wall. */
+const SUBSTRATE_TEXTURE_SCALE = 1.1;
+/** Scale factor for wheel geometry only (substrate unchanged), centered on canvas. */
+const WHEEL_CONTENT_SCALE = 1.08;
 /** Outer zodiac band (ticks + sign labels), scaled up from the old 520 canvas. */
 const R_ZOD_OUT = 257;
 const R_ZOD_IN = 218;
@@ -889,7 +862,7 @@ function formatOrb(o: number): string {
   return `${d}°${String(m).padStart(2, "0")}'`;
 }
 
-/** Pigment-ink colors on parchment — saturated, manuscript-style. */
+/** Pigment-ink colors — saturated, manuscript-style. */
 function colorForBody(name: string): string {
   const palette: Record<string, string> = {
     Sun: "#c08018",
