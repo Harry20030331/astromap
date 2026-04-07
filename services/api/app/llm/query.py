@@ -107,6 +107,9 @@ def parse_query_markdown(md: str) -> dict[str, Any]:
             flush_detail()
             current_detail_key = h4.group(1).strip()
             current_detail_lines = []
+            # Models often omit "### Structure details"; prose under #### must still be captured.
+            in_details = True
+            current_list = None
             continue
 
         # ### section header
@@ -147,7 +150,7 @@ def parse_query_markdown(md: str) -> dict[str, Any]:
             continue
 
         if not line:
-            if in_details and current_detail_key and current_detail_lines:
+            if current_detail_key and current_detail_lines:
                 # blank line inside a detail block — keep accumulating (paragraph break)
                 current_detail_lines.append("")
             continue
@@ -157,8 +160,8 @@ def parse_query_markdown(md: str) -> dict[str, Any]:
             out[current_list].append(line[2:].strip())
             continue
 
-        # prose line inside a detail sub-section
-        if in_details and current_detail_key is not None:
+        # prose line under #### (even when "### Structure details" was omitted)
+        if current_detail_key is not None:
             current_detail_lines.append(line)
 
     flush_detail()

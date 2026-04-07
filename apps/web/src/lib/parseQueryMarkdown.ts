@@ -41,6 +41,9 @@ export function parseQueryMarkdown(md: string): ParsedQueryResponse {
       flushDetail();
       currentDetailKey = h4[1]!.trim();
       currentDetailLines = [];
+      // Models often skip "### Structure details"; without this, prose under #### is never collected.
+      inDetails = true;
+      currentList = null;
       continue;
     }
 
@@ -82,7 +85,7 @@ export function parseQueryMarkdown(md: string): ParsedQueryResponse {
     }
 
     if (!line) {
-      if (inDetails && currentDetailKey && currentDetailLines.length > 0) {
+      if (currentDetailKey && currentDetailLines.length > 0) {
         currentDetailLines.push("");
       }
       continue;
@@ -93,7 +96,7 @@ export function parseQueryMarkdown(md: string): ParsedQueryResponse {
       continue;
     }
 
-    if (inDetails && currentDetailKey !== null) {
+    if (currentDetailKey !== null) {
       currentDetailLines.push(line);
     }
   }
