@@ -3,7 +3,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiGet, apiPostFormData, authHeaders } from "@/lib/api";
-import { API_URL } from "@/lib/config";
+import { API_URL, isQueryStreamDebugEnabled } from "@/lib/config";
+import { parseQueryMarkdown } from "@/lib/parseQueryMarkdown";
 import { LogoStar } from "@/components/LogoStar";
 import { useI18n } from "@/lib/i18n";
 
@@ -252,9 +253,13 @@ export function SessionQueryChat({
       queryPendingRef.current = true;
       setQueryPending(true);
       void (async () => {
+        let sawComplete = false;
+        /** Full markdown from deltas; state updates can lag one frame — use this for client fallback parse. */
+        let fullMd = "";
         const applyStreamEvents = (events: SseEvent[]) => {
           for (const ev of events) {
             if (ev.type === "delta" && ev.content) {
+              fullMd += ev.content;
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === assistantId
@@ -263,6 +268,17 @@ export function SessionQueryChat({
                 ),
               );
             } else if (ev.type === "complete") {
+              sawComplete = true;
+              if (isQueryStreamDebugEnabled()) {
+                const r = ev.response;
+                console.info("[query/stream] complete", {
+                  structures: r?.relevant_structures?.length ?? 0,
+                  detailKeys: r?.structure_details
+                    ? Object.keys(r.structure_details)
+                    : [],
+                  hints: r?.interpretation_hints?.length ?? 0,
+                });
+              }
               setErr(null);
               setMessages((prev) =>
                 prev.map((m) =>
@@ -310,6 +326,41 @@ export function SessionQueryChat({
           applyStreamEvents(flushed.events);
           const trailing = parseSseTrailing(flushed.rest);
           if (trailing) applyStreamEvents([trailing]);
+
+          if (!sawComplete && fullMd.trim().length > 0) {
+            const parsed = parseQueryMarkdown(fullMd);
+            const hasPayload =
+              (parsed.relevant_structures?.length ?? 0) > 0 ||
+              (parsed.interpretation_hints?.length ?? 0) > 0 ||
+              (parsed.suggested_questions?.length ?? 0) > 0 ||
+              Object.keys(parsed.structure_details ?? {}).length > 0;
+            if (hasPayload) {
+              if (isQueryStreamDebugEnabled()) {
+                console.warn(
+                  "[query/stream] no SSE complete — applied client parseQueryMarkdown fallback",
+                  {
+                    structures: parsed.relevant_structures.length,
+                    detailKeys: Object.keys(parsed.structure_details),
+                  },
+                );
+              }
+              setErr(null);
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId
+                    ? { ...m, response: parsed, streamBuffer: undefined }
+                    : m,
+                ),
+              );
+            } else if (isQueryStreamDebugEnabled()) {
+              console.warn(
+                "[query/stream] no complete and fallback parse empty; md head:",
+                fullMd.slice(0, 280),
+              );
+            }
+          } else if (isQueryStreamDebugEnabled() && sawComplete) {
+            console.info("[query/stream] finished with server complete event");
+          }
         } catch (e) {
           const msg = e instanceof Error ? e.message : "Request failed";
           setErr(msg);
