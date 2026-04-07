@@ -35,3 +35,14 @@ CORS_ORIGINS = [
     "http://127.0.0.1:3000",
     *_extra_origins,
 ]
+
+# Verbose logging for POST /sessions/.../query/stream (system prompt, raw markdown, parse result).
+DEBUG_QUERY_PIPELINE = os.getenv("DEBUG_QUERY_PIPELINE", "").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+)
+# If set, log full user JSON + full markdown (can be huge on Render).
+DEBUG_QUERY_PIPELINE_RAW_FULL = os.getenv(
+    "DEBUG_QUERY_PIPELINE_RAW_FULL", ""
+).strip().lower() in ("1", "true", "yes")

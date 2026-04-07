@@ -81,6 +81,27 @@ def _normalize_locale(locale: str | None) -> str:
     return "en"
 
 
+def build_query_stream_messages(
+    features: dict[str, Any],
+    query_text: str,
+    aspects_shortlist: list[str],
+    *,
+    locale: str | None = None,
+) -> tuple[str, str]:
+    """System + user JSON string for the streaming markdown query (same as run_query_stream)."""
+    payload = {
+        "features": features,
+        "major_aspects_shortlist": aspects_shortlist[:40],
+        "query": query_text,
+    }
+    user_content = json.dumps(payload, ensure_ascii=False)
+    lang = _normalize_locale(locale)
+    system = QUERY_STREAM_SYSTEM + (
+        QUERY_STREAM_LANG_ZH if lang == "zh" else QUERY_STREAM_LANG_EN
+    )
+    return system, user_content
+
+
 def parse_query_markdown(md: str) -> dict[str, Any]:
     """Turn streamed markdown into the same shape as JSON query responses."""
     out: dict[str, Any] = {
@@ -218,16 +239,8 @@ def run_query_stream(
         raise RuntimeError("OPENAI_API_KEY is not set")
 
     client = OpenAI(api_key=OPENAI_API_KEY)
-    payload = {
-        "features": features,
-        "major_aspects_shortlist": aspects_shortlist[:40],
-        "query": query_text,
-    }
-    user_content = json.dumps(payload, ensure_ascii=False)
-
-    lang = _normalize_locale(locale)
-    system = QUERY_STREAM_SYSTEM + (
-        QUERY_STREAM_LANG_ZH if lang == "zh" else QUERY_STREAM_LANG_EN
+    system, user_content = build_query_stream_messages(
+        features, query_text, aspects_shortlist, locale=locale
     )
 
     stream = client.chat.completions.create(

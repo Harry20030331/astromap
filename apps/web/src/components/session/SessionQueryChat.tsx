@@ -40,9 +40,20 @@ type ChatMessage = {
   streamBuffer?: string;
 };
 
+/** Mirrors API complete.debug when debug_pipeline=true on the request */
+type QueryStreamServerDebug = {
+  session_id: string;
+  locale: string | null;
+  query_text: string;
+  system_prompt: string;
+  user_json: string;
+  raw_markdown: string;
+  parsed_response: QueryResponse;
+};
+
 type SseEvent =
   | { type: "delta"; content: string }
-  | { type: "complete"; response: QueryResponse }
+  | { type: "complete"; response: QueryResponse; debug?: QueryStreamServerDebug }
   | { type: "error"; message: string };
 
 function parseSseBuffer(buffer: string): { events: SseEvent[]; rest: string } {
@@ -274,6 +285,35 @@ export function SessionQueryChat({
               );
             } else if (ev.type === "complete") {
               sawComplete = true;
+              if (isQueryStreamDebugEnabled() && ev.debug) {
+                const d = ev.debug;
+                console.groupCollapsed(
+                  "[query_pipeline] server → browser (full API bundle)",
+                );
+                console.info("session_id", d.session_id);
+                console.info("locale", d.locale);
+                console.info("query_text", d.query_text);
+                console.info(
+                  `system_prompt (${d.system_prompt.length} chars)`,
+                  "\n",
+                  d.system_prompt,
+                );
+                console.info(
+                  `user_json (${d.user_json.length} chars)`,
+                  "\n",
+                  d.user_json,
+                );
+                console.info(
+                  `raw_markdown (${d.raw_markdown.length} chars)`,
+                  "\n",
+                  d.raw_markdown,
+                );
+                console.info(
+                  "parsed_response (before client enrich)",
+                  d.parsed_response,
+                );
+                console.groupEnd();
+              }
               const rawResponse = ev.response;
               const response =
                 fullMd.trim().length > 0
@@ -281,7 +321,18 @@ export function SessionQueryChat({
                   : rawResponse;
               if (isQueryStreamDebugEnabled()) {
                 const r = response;
-                console.info("[query/stream] complete", {
+                console.groupCollapsed(
+                  "[query_pipeline] ②③ client: assembled markdown + parsed response (render input)",
+                );
+                console.info("② fullMd length", fullMd.length);
+                console.info("② diagnostics", queryMarkdownDiagnostics(fullMd));
+                if (fullMd.length <= 14000) {
+                  console.info("② fullMd:\n", fullMd);
+                } else {
+                  console.info("② fullMd head:\n", fullMd.slice(0, 7000));
+                  console.info("② fullMd tail:\n", fullMd.slice(-7000));
+                }
+                console.info("③ counts", {
                   structures: r?.relevant_structures?.length ?? 0,
                   detailKeys: r?.structure_details
                     ? Object.keys(r.structure_details)
@@ -289,13 +340,10 @@ export function SessionQueryChat({
                   hints: r?.interpretation_hints?.length ?? 0,
                 });
                 console.info(
-                  "[query/stream] full response JSON:\n",
+                  "③ response JSON (MessageBubble / StructureCard):\n",
                   JSON.stringify(response, null, 2),
                 );
-                console.info(
-                  "[query/stream] markdown diagnostics",
-                  queryMarkdownDiagnostics(fullMd),
-                );
+                console.groupEnd();
               }
               setErr(null);
               setMessages((prev) =>
@@ -313,10 +361,32 @@ export function SessionQueryChat({
 
         try {
           const auth = await authHeaders();
-          const res = await fetch(`${API_URL}/sessions/${sessionId}/query/stream`, {
+          const streamUrl = `${API_URL}/sessions/${sessionId}/query/stream`;
+          if (isQueryStreamDebugEnabled()) {
+            console.groupCollapsed("[query_pipeline] ① client → POST /query/stream");
+            console.info("url", streamUrl);
+            console.info("body", {
+              locale,
+              debug_pipeline: true,
+              textLen: trimmed.length,
+              textPreview:
+                trimmed.length > 600
+                  ? `${trimmed.slice(0, 600)}…`
+                  : trimmed,
+            });
+            console.info(
+              "Server echoes system_prompt, user_json, raw_markdown in SSE complete.debug",
+            );
+            console.groupEnd();
+          }
+          const res = await fetch(streamUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json", ...auth },
-            body: JSON.stringify({ text: trimmed, locale }),
+            body: JSON.stringify({
+              text: trimmed,
+              locale,
+              debug_pipeline: isQueryStreamDebugEnabled(),
+            }),
           });
           if (!res.ok) {
             const t = await res.text();
@@ -355,7 +425,7 @@ export function SessionQueryChat({
             if (hasPayload) {
               if (isQueryStreamDebugEnabled()) {
                 console.warn(
-                  "[query/stream] no SSE complete — applied client parseQueryMarkdown fallback",
+                  "[query_pipeline] no SSE complete — client parseQueryMarkdown fallback",
                   {
                     structures: parsed.relevant_structures.length,
                     detailKeys: Object.keys(parsed.structure_details),
@@ -372,12 +442,12 @@ export function SessionQueryChat({
               );
             } else if (isQueryStreamDebugEnabled()) {
               console.warn(
-                "[query/stream] no complete and fallback parse empty; md head:",
+                "[query_pipeline] no complete and fallback parse empty; md head:",
                 fullMd.slice(0, 280),
               );
             }
           } else if (isQueryStreamDebugEnabled() && sawComplete) {
-            console.info("[query/stream] finished with server complete event");
+            console.info("[query_pipeline] stream closed after server complete event");
           }
         } catch (e) {
           const msg = e instanceof Error ? e.message : "Request failed";
