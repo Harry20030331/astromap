@@ -4,7 +4,12 @@ import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiGet, apiPostFormData, authHeaders } from "@/lib/api";
 import { API_URL, isQueryStreamDebugEnabled } from "@/lib/config";
-import { parseQueryMarkdown } from "@/lib/parseQueryMarkdown";
+import {
+  enrichQueryResponseFromMarkdown,
+  interpretationForStructure,
+  parseQueryMarkdown,
+  queryMarkdownDiagnostics,
+} from "@/lib/parseQueryMarkdown";
 import { LogoStar } from "@/components/LogoStar";
 import { useI18n } from "@/lib/i18n";
 
@@ -269,8 +274,13 @@ export function SessionQueryChat({
               );
             } else if (ev.type === "complete") {
               sawComplete = true;
+              const rawResponse = ev.response;
+              const response =
+                fullMd.trim().length > 0
+                  ? enrichQueryResponseFromMarkdown(rawResponse, fullMd)
+                  : rawResponse;
               if (isQueryStreamDebugEnabled()) {
-                const r = ev.response;
+                const r = response;
                 console.info("[query/stream] complete", {
                   structures: r?.relevant_structures?.length ?? 0,
                   detailKeys: r?.structure_details
@@ -278,12 +288,20 @@ export function SessionQueryChat({
                     : [],
                   hints: r?.interpretation_hints?.length ?? 0,
                 });
+                console.info(
+                  "[query/stream] full response JSON:\n",
+                  JSON.stringify(response, null, 2),
+                );
+                console.info(
+                  "[query/stream] markdown diagnostics",
+                  queryMarkdownDiagnostics(fullMd),
+                );
               }
               setErr(null);
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === assistantId
-                    ? { ...m, response: ev.response, streamBuffer: undefined }
+                    ? { ...m, response, streamBuffer: undefined }
                     : m,
                 ),
               );
@@ -882,7 +900,8 @@ function MessageBubble({
                   key={s}
                   structure={s}
                   interpretationText={
-                    response.structure_details?.[s] ?? fallbackInterpretations[s]
+                    interpretationForStructure(s, response.structure_details) ??
+                    fallbackInterpretations[s]
                   }
                 />
               ))}

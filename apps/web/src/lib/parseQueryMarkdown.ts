@@ -44,7 +44,8 @@ export function parseQueryMarkdown(md: string): ParsedQueryResponse {
       continue;
     }
 
-    const h3 = line.match(/^###\s+(.+)$/i);
+    // Models sometimes use ## instead of ### for section titles; #### must stay four hashes.
+    const h3 = line.match(/^###\s+(.+)$/i) || line.match(/^##\s+(.+)$/i);
     if (h3) {
       flushDetail();
       currentDetailKey = null;
@@ -105,4 +106,84 @@ export function parseQueryMarkdown(md: string): ParsedQueryResponse {
   }
   out.structure_details = cleaned;
   return out;
+}
+
+/** Loose API / message shape */
+export type LooseQueryResponse = {
+  relevant_structures?: string[];
+  interpretation_hints?: string[];
+  suggested_questions?: string[];
+  structure_details?: Record<string, string>;
+};
+
+function normalizeWs(s: string): string {
+  return s.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Map a bullet from "Chart structures" to its #### paragraph; tolerates minor key drift.
+ */
+export function interpretationForStructure(
+  structure: string,
+  details: Record<string, string> | undefined,
+): string | undefined {
+  if (!details || Object.keys(details).length === 0) return undefined;
+  if (details[structure]) return details[structure];
+  const sn = normalizeWs(structure);
+  for (const [k, v] of Object.entries(details)) {
+    if (normalizeWs(k) === sn) return v;
+  }
+  let best: string | undefined;
+  let bestLen = 0;
+  for (const [k, v] of Object.entries(details)) {
+    const kn = normalizeWs(k);
+    if (sn.includes(kn) || kn.includes(sn)) {
+      const len = Math.min(sn.length, kn.length);
+      if (len > bestLen) {
+        bestLen = len;
+        best = v;
+      }
+    }
+  }
+  return bestLen >= 6 ? best : undefined;
+}
+
+/** Re-parse streamed markdown and fill empty / missing structure_details (same rules as server). */
+export function enrichQueryResponseFromMarkdown(
+  response: LooseQueryResponse,
+  fullMd: string,
+): LooseQueryResponse {
+  if (!fullMd.trim()) return response;
+  const parsed = parseQueryMarkdown(fullMd);
+  const merged: Record<string, string> = { ...(response.structure_details ?? {}) };
+
+  if (Object.keys(merged).length === 0 && Object.keys(parsed.structure_details).length > 0) {
+    Object.assign(merged, parsed.structure_details);
+  }
+
+  for (const s of response.relevant_structures ?? []) {
+    if (!merged[s]) {
+      const v = interpretationForStructure(s, parsed.structure_details);
+      if (v) merged[s] = v;
+    }
+  }
+
+  return { ...response, structure_details: merged };
+}
+
+/** Console diagnostics: whether raw markdown looks like it contains a structure-details section. */
+export function queryMarkdownDiagnostics(md: string): {
+  len: number;
+  hasStructureDetailsEn: boolean;
+  hasStructureDetailsZh: boolean;
+  h4Headings: number;
+  sampleTail: string;
+} {
+  return {
+    len: md.length,
+    hasStructureDetailsEn: /#{2,3}\s*Structure details/i.test(md),
+    hasStructureDetailsZh: md.includes("结构细节"),
+    h4Headings: (md.match(/^####\s/gm) ?? []).length,
+    sampleTail: md.slice(Math.max(0, md.length - 1200)),
+  };
 }

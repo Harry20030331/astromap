@@ -110,7 +110,9 @@ def parse_query_markdown(md: str) -> dict[str, Any]:
             continue
 
         # ### section header
-        h3 = re.match(r"^###\s+(.+)$", line, re.IGNORECASE)
+        h3 = re.match(r"^###\s+(.+)$", line, re.IGNORECASE) or re.match(
+            r"^##\s+(.+)$", line, re.IGNORECASE
+        )
         if h3:
             flush_detail()
             current_detail_key = None
