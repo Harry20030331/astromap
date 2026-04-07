@@ -81,27 +81,6 @@ def _normalize_locale(locale: str | None) -> str:
     return "en"
 
 
-def build_query_stream_messages(
-    features: dict[str, Any],
-    query_text: str,
-    aspects_shortlist: list[str],
-    *,
-    locale: str | None = None,
-) -> tuple[str, str]:
-    """System + user JSON string for the streaming markdown query (same as run_query_stream)."""
-    payload = {
-        "features": features,
-        "major_aspects_shortlist": aspects_shortlist[:40],
-        "query": query_text,
-    }
-    user_content = json.dumps(payload, ensure_ascii=False)
-    lang = _normalize_locale(locale)
-    system = QUERY_STREAM_SYSTEM + (
-        QUERY_STREAM_LANG_ZH if lang == "zh" else QUERY_STREAM_LANG_EN
-    )
-    return system, user_content
-
-
 def parse_query_markdown(md: str) -> dict[str, Any]:
     """Turn streamed markdown into the same shape as JSON query responses."""
     out: dict[str, Any] = {
@@ -110,8 +89,8 @@ def parse_query_markdown(md: str) -> dict[str, Any]:
         "suggested_questions": [],
         "structure_details": {},
     }
-    current_list: str | None = None   # relevant_structures / interpretation_hints / suggested_questions
-    in_details = False                # inside ### Structure details
+    current_list: str | None = None
+    in_details = False
     current_detail_key: str | None = None
     current_detail_lines: list[str] = []
 
@@ -122,44 +101,29 @@ def parse_query_markdown(md: str) -> dict[str, Any]:
     for raw in md.splitlines():
         line = raw.strip()
 
-        # #### sub-header inside Structure details
         h4 = re.match(r"^####\s+(.+)$", line, re.IGNORECASE)
         if h4:
             flush_detail()
             current_detail_key = h4.group(1).strip()
             current_detail_lines = []
-            # Models often omit "### Structure details"; prose under #### must still be captured.
-            in_details = True
-            current_list = None
             continue
 
-        # ### section header
-        h3 = re.match(r"^###\s+(.+)$", line, re.IGNORECASE) or re.match(
-            r"^##\s+(.+)$", line, re.IGNORECASE
-        )
+        h3 = re.match(r"^###\s+(.+)$", line, re.IGNORECASE)
         if h3:
             flush_detail()
             current_detail_key = None
             current_detail_lines = []
-            raw_title = h3.group(1).strip()
-            title = raw_title.lower().rstrip(":")
-            # English headings from the prompt, plus Chinese if the model translates ### lines (zh locale).
-            zh_structure_details = "结构细节" in raw_title
-            en_structure_details = "detail" in title and "structure" in title
-            if zh_structure_details or en_structure_details:
+            title = h3.group(1).strip().lower().rstrip(":")
+            if "structure" in title and "detail" in title:
                 current_list = None
                 in_details = True
-            elif (
-                ("structure" in title and "detail" not in title)
-                or "星盘结构" in raw_title
-                or "图表结构" in raw_title
-            ):
+            elif "structure" in title and "detail" not in title:
                 current_list = "relevant_structures"
                 in_details = False
-            elif "interpretation" in title or "解读" in raw_title:
+            elif "interpretation" in title:
                 current_list = "interpretation_hints"
                 in_details = False
-            elif "follow" in title or "推荐追问" in raw_title:
+            elif "follow" in title:
                 current_list = "suggested_questions"
                 in_details = False
             elif "detail" in title:
@@ -171,22 +135,18 @@ def parse_query_markdown(md: str) -> dict[str, Any]:
             continue
 
         if not line:
-            if current_detail_key and current_detail_lines:
-                # blank line inside a detail block — keep accumulating (paragraph break)
+            if in_details and current_detail_key and current_detail_lines:
                 current_detail_lines.append("")
             continue
 
-        # bullet in list sections
         if (line.startswith("- ") or line.startswith("* ")) and current_list:
             out[current_list].append(line[2:].strip())
             continue
 
-        # prose line under #### (even when "### Structure details" was omitted)
-        if current_detail_key is not None:
+        if in_details and current_detail_key is not None:
             current_detail_lines.append(line)
 
     flush_detail()
-    # Clean up any trailing empty strings in detail values
     out["structure_details"] = {
         k: v.strip() for k, v in out["structure_details"].items() if v.strip()
     }
@@ -239,8 +199,15 @@ def run_query_stream(
         raise RuntimeError("OPENAI_API_KEY is not set")
 
     client = OpenAI(api_key=OPENAI_API_KEY)
-    system, user_content = build_query_stream_messages(
-        features, query_text, aspects_shortlist, locale=locale
+    payload = {
+        "features": features,
+        "major_aspects_shortlist": aspects_shortlist[:40],
+        "query": query_text,
+    }
+    user_content = json.dumps(payload, ensure_ascii=False)
+    lang = _normalize_locale(locale)
+    system = QUERY_STREAM_SYSTEM + (
+        QUERY_STREAM_LANG_ZH if lang == "zh" else QUERY_STREAM_LANG_EN
     )
 
     stream = client.chat.completions.create(

@@ -12,7 +12,7 @@ DATA_DIR = Path(os.getenv("DATA_DIR", str(_REPO_ROOT / "data"))).resolve()
 SESSIONS_DIR = DATA_DIR / "sessions"
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.4")
 OPENAI_WHISPER_MODEL = os.getenv("OPENAI_WHISPER_MODEL", "whisper-1")
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
@@ -35,14 +35,3 @@ CORS_ORIGINS = [
     "http://127.0.0.1:3000",
     *_extra_origins,
 ]
-
-# Verbose logging for POST /sessions/.../query/stream (system prompt, raw markdown, parse result).
-DEBUG_QUERY_PIPELINE = os.getenv("DEBUG_QUERY_PIPELINE", "").strip().lower() in (
-    "1",
-    "true",
-    "yes",
-)
-# If set, log full user JSON + full markdown (can be huge on Render).
-DEBUG_QUERY_PIPELINE_RAW_FULL = os.getenv(
-    "DEBUG_QUERY_PIPELINE_RAW_FULL", ""
-).strip().lower() in ("1", "true", "yes")

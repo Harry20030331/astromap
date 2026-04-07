@@ -28,7 +28,6 @@ from app.auth import get_current_user_id
 from app.config import CORS_ORIGINS, GEONAMES_USERNAME, WHISPER_MAX_BYTES
 from app.geo.geonames import MAX_QUERY_LEN, MIN_QUERY_LEN, search_cities, timezone_at_coords
 from app.llm import query as query_llm
-from app.query_pipeline_debug import log_stream_llm_input, log_stream_llm_output
 from app.llm import themes as themes_llm
 from app.llm import transcribe as transcribe_llm
 from app.storage import supabase_store as store
@@ -60,10 +59,6 @@ class QueryBody(BaseModel):
     locale: str | None = Field(
         default=None,
         description="UI language: 'en' or 'zh'; steers LLM reply language",
-    )
-    debug_pipeline: bool = Field(
-        default=False,
-        description="If true, SSE complete event includes system prompt, user JSON, raw markdown for browser devtools",
     )
 
 
@@ -499,16 +494,6 @@ def post_query_stream(
     def event_generator():
         pieces: list[str] = []
         try:
-            sys_msg, user_msg = query_llm.build_query_stream_messages(
-                features, body.text, aspects_short, locale=body.locale
-            )
-            log_stream_llm_input(
-                session_id=session_id,
-                locale=body.locale,
-                query_text=body.text,
-                system=sys_msg,
-                user_content=user_msg,
-            )
             for token in query_llm.run_query_stream(
                 features, body.text, aspects_short, locale=body.locale
             ):
@@ -516,9 +501,6 @@ def post_query_stream(
                 yield f"data: {json.dumps({'type': 'delta', 'content': token})}\n\n"
             md = "".join(pieces)
             response = query_llm.parse_query_markdown(md)
-            log_stream_llm_output(
-                session_id=session_id, markdown=md, parsed=response
-            )
             entry = {
                 "text": body.text,
                 "response": response,
@@ -528,18 +510,7 @@ def post_query_stream(
             if response.get("structure_details"):
                 rec.setdefault("structure_interpretations", {}).update(response["structure_details"])
             store.save_session(rec, user_id)
-            complete_ev: dict[str, Any] = {"type": "complete", "response": response}
-            if body.debug_pipeline:
-                complete_ev["debug"] = {
-                    "session_id": session_id,
-                    "locale": body.locale,
-                    "query_text": body.text,
-                    "system_prompt": sys_msg,
-                    "user_json": user_msg,
-                    "raw_markdown": md,
-                    "parsed_response": response,
-                }
-            yield f"data: {json.dumps(complete_ev, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'complete', 'response': response})}\n\n"
         except RuntimeError as e:
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
         except Exception as e:

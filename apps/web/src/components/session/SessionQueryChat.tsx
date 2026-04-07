@@ -3,13 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiGet, apiPostFormData, authHeaders } from "@/lib/api";
-import { API_URL, isQueryStreamDebugEnabled } from "@/lib/config";
-import {
-  enrichQueryResponseFromMarkdown,
-  interpretationForStructure,
-  parseQueryMarkdown,
-  queryMarkdownDiagnostics,
-} from "@/lib/parseQueryMarkdown";
+import { API_URL } from "@/lib/config";
 import { LogoStar } from "@/components/LogoStar";
 import { useI18n } from "@/lib/i18n";
 
@@ -40,20 +34,9 @@ type ChatMessage = {
   streamBuffer?: string;
 };
 
-/** Mirrors API complete.debug when debug_pipeline=true on the request */
-type QueryStreamServerDebug = {
-  session_id: string;
-  locale: string | null;
-  query_text: string;
-  system_prompt: string;
-  user_json: string;
-  raw_markdown: string;
-  parsed_response: QueryResponse;
-};
-
 type SseEvent =
   | { type: "delta"; content: string }
-  | { type: "complete"; response: QueryResponse; debug?: QueryStreamServerDebug }
+  | { type: "complete"; response: QueryResponse }
   | { type: "error"; message: string };
 
 function parseSseBuffer(buffer: string): { events: SseEvent[]; rest: string } {
@@ -109,15 +92,9 @@ function parseStreamingMarkdown(md: string): StreamSection[] {
 
   const sectionFor = (title: string): StreamSection["key"] | null => {
     const t = title.toLowerCase();
-    // English headers (prompt) + Chinese (model sometimes translates ### lines on zh locale)
-    const zhStructures = title.includes("星盘结构") || title.includes("图表结构");
-    const zhDetails = title.includes("结构细节");
-    if (zhDetails || (t.includes("structure") && t.includes("detail"))) return null;
-    if ((t.includes("structure") && !t.includes("detail")) || zhStructures) {
-      return "relevant_structures";
-    }
-    if (t.includes("interpretation") || title.includes("解读")) return "interpretation_hints";
-    if (t.includes("follow") || title.includes("推荐追问")) return "suggested_questions";
+    if (t.includes("structure") && !t.includes("detail")) return "relevant_structures";
+    if (t.includes("interpretation")) return "interpretation_hints";
+    if (t.includes("follow")) return "suggested_questions";
     return null;
   };
 
@@ -269,13 +246,9 @@ export function SessionQueryChat({
       queryPendingRef.current = true;
       setQueryPending(true);
       void (async () => {
-        let sawComplete = false;
-        /** Full markdown from deltas; state updates can lag one frame — use this for client fallback parse. */
-        let fullMd = "";
         const applyStreamEvents = (events: SseEvent[]) => {
           for (const ev of events) {
             if (ev.type === "delta" && ev.content) {
-              fullMd += ev.content;
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === assistantId
@@ -284,72 +257,15 @@ export function SessionQueryChat({
                 ),
               );
             } else if (ev.type === "complete") {
-              sawComplete = true;
-              if (isQueryStreamDebugEnabled() && ev.debug) {
-                const d = ev.debug;
-                console.groupCollapsed(
-                  "[query_pipeline] server → browser (full API bundle)",
-                );
-                console.info("session_id", d.session_id);
-                console.info("locale", d.locale);
-                console.info("query_text", d.query_text);
-                console.info(
-                  `system_prompt (${d.system_prompt.length} chars)`,
-                  "\n",
-                  d.system_prompt,
-                );
-                console.info(
-                  `user_json (${d.user_json.length} chars)`,
-                  "\n",
-                  d.user_json,
-                );
-                console.info(
-                  `raw_markdown (${d.raw_markdown.length} chars)`,
-                  "\n",
-                  d.raw_markdown,
-                );
-                console.info(
-                  "parsed_response (before client enrich)",
-                  d.parsed_response,
-                );
-                console.groupEnd();
-              }
-              const rawResponse = ev.response;
-              const response =
-                fullMd.trim().length > 0
-                  ? enrichQueryResponseFromMarkdown(rawResponse, fullMd)
-                  : rawResponse;
-              if (isQueryStreamDebugEnabled()) {
-                const r = response;
-                console.groupCollapsed(
-                  "[query_pipeline] ②③ client: assembled markdown + parsed response (render input)",
-                );
-                console.info("② fullMd length", fullMd.length);
-                console.info("② diagnostics", queryMarkdownDiagnostics(fullMd));
-                if (fullMd.length <= 14000) {
-                  console.info("② fullMd:\n", fullMd);
-                } else {
-                  console.info("② fullMd head:\n", fullMd.slice(0, 7000));
-                  console.info("② fullMd tail:\n", fullMd.slice(-7000));
-                }
-                console.info("③ counts", {
-                  structures: r?.relevant_structures?.length ?? 0,
-                  detailKeys: r?.structure_details
-                    ? Object.keys(r.structure_details)
-                    : [],
-                  hints: r?.interpretation_hints?.length ?? 0,
-                });
-                console.info(
-                  "③ response JSON (MessageBubble / StructureCard):\n",
-                  JSON.stringify(response, null, 2),
-                );
-                console.groupEnd();
-              }
               setErr(null);
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === assistantId
-                    ? { ...m, response, streamBuffer: undefined }
+                    ? {
+                        ...m,
+                        response: ev.response,
+                        streamBuffer: undefined,
+                      }
                     : m,
                 ),
               );
@@ -361,33 +277,14 @@ export function SessionQueryChat({
 
         try {
           const auth = await authHeaders();
-          const streamUrl = `${API_URL}/sessions/${sessionId}/query/stream`;
-          if (isQueryStreamDebugEnabled()) {
-            console.groupCollapsed("[query_pipeline] ① client → POST /query/stream");
-            console.info("url", streamUrl);
-            console.info("body", {
-              locale,
-              debug_pipeline: true,
-              textLen: trimmed.length,
-              textPreview:
-                trimmed.length > 600
-                  ? `${trimmed.slice(0, 600)}…`
-                  : trimmed,
-            });
-            console.info(
-              "Server echoes system_prompt, user_json, raw_markdown in SSE complete.debug",
-            );
-            console.groupEnd();
-          }
-          const res = await fetch(streamUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", ...auth },
-            body: JSON.stringify({
-              text: trimmed,
-              locale,
-              debug_pipeline: isQueryStreamDebugEnabled(),
-            }),
-          });
+          const res = await fetch(
+            `${API_URL}/sessions/${sessionId}/query/stream`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json", ...auth },
+              body: JSON.stringify({ text: trimmed, locale }),
+            },
+          );
           if (!res.ok) {
             const t = await res.text();
             throw new Error(t || `${res.status}`);
@@ -407,48 +304,10 @@ export function SessionQueryChat({
             applyStreamEvents(events);
             if (done) break;
           }
-          // Flush UTF-8 decoder; without this, a multibyte char split across chunks can drop the tail
-          // (including the final SSE `complete` frame) — more common on real networks than on localhost.
-          raw += decoder.decode(new Uint8Array(), { stream: false });
           const flushed = parseSseBuffer(raw);
           applyStreamEvents(flushed.events);
           const trailing = parseSseTrailing(flushed.rest);
           if (trailing) applyStreamEvents([trailing]);
-
-          if (!sawComplete && fullMd.trim().length > 0) {
-            const parsed = parseQueryMarkdown(fullMd);
-            const hasPayload =
-              (parsed.relevant_structures?.length ?? 0) > 0 ||
-              (parsed.interpretation_hints?.length ?? 0) > 0 ||
-              (parsed.suggested_questions?.length ?? 0) > 0 ||
-              Object.keys(parsed.structure_details ?? {}).length > 0;
-            if (hasPayload) {
-              if (isQueryStreamDebugEnabled()) {
-                console.warn(
-                  "[query_pipeline] no SSE complete — client parseQueryMarkdown fallback",
-                  {
-                    structures: parsed.relevant_structures.length,
-                    detailKeys: Object.keys(parsed.structure_details),
-                  },
-                );
-              }
-              setErr(null);
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantId
-                    ? { ...m, response: parsed, streamBuffer: undefined }
-                    : m,
-                ),
-              );
-            } else if (isQueryStreamDebugEnabled()) {
-              console.warn(
-                "[query_pipeline] no complete and fallback parse empty; md head:",
-                fullMd.slice(0, 280),
-              );
-            }
-          } else if (isQueryStreamDebugEnabled() && sawComplete) {
-            console.info("[query_pipeline] stream closed after server complete event");
-          }
         } catch (e) {
           const msg = e instanceof Error ? e.message : "Request failed";
           setErr(msg);
@@ -970,7 +829,7 @@ function MessageBubble({
                   key={s}
                   structure={s}
                   interpretationText={
-                    interpretationForStructure(s, response.structure_details) ??
+                    response.structure_details?.[s] ??
                     fallbackInterpretations[s]
                   }
                 />
