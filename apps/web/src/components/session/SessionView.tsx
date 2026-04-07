@@ -166,7 +166,7 @@ export function SessionView({ sessionId }: { sessionId: string }) {
   return (
     <main className="h-full w-full min-w-0 overflow-y-auto overscroll-contain px-4 py-6">
       <div className="mx-auto w-full max-w-[min(100%,480px)]">
-        <header className="mb-4">
+        <header className="mb-7">
           <div className="flex w-full min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
             <h1 className="min-w-0 text-2xl font-semibold tracking-tight text-stone-900">{title}</h1>
             <ChartHeaderGlyphs bodies={data.chart.bodies} />

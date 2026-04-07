@@ -115,14 +115,25 @@ def parse_query_markdown(md: str) -> dict[str, Any]:
             flush_detail()
             current_detail_key = None
             current_detail_lines = []
-            title = h3.group(1).strip().lower().rstrip(":")
-            if "structure" in title and "detail" not in title:
+            raw_title = h3.group(1).strip()
+            title = raw_title.lower().rstrip(":")
+            # English headings from the prompt, plus Chinese if the model translates ### lines (zh locale).
+            zh_structure_details = "结构细节" in raw_title
+            en_structure_details = "detail" in title and "structure" in title
+            if zh_structure_details or en_structure_details:
+                current_list = None
+                in_details = True
+            elif (
+                ("structure" in title and "detail" not in title)
+                or "星盘结构" in raw_title
+                or "图表结构" in raw_title
+            ):
                 current_list = "relevant_structures"
                 in_details = False
-            elif "interpretation" in title:
+            elif "interpretation" in title or "解读" in raw_title:
                 current_list = "interpretation_hints"
                 in_details = False
-            elif "follow" in title:
+            elif "follow" in title or "推荐追问" in raw_title:
                 current_list = "suggested_questions"
                 in_details = False
             elif "detail" in title:

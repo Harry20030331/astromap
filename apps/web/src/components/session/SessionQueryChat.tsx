@@ -92,9 +92,15 @@ function parseStreamingMarkdown(md: string): StreamSection[] {
 
   const sectionFor = (title: string): StreamSection["key"] | null => {
     const t = title.toLowerCase();
-    if (t.includes("structure") && !t.includes("detail")) return "relevant_structures";
-    if (t.includes("interpretation")) return "interpretation_hints";
-    if (t.includes("follow")) return "suggested_questions";
+    // English headers (prompt) + Chinese (model sometimes translates ### lines on zh locale)
+    const zhStructures = title.includes("星盘结构") || title.includes("图表结构");
+    const zhDetails = title.includes("结构细节");
+    if (zhDetails || (t.includes("structure") && t.includes("detail"))) return null;
+    if ((t.includes("structure") && !t.includes("detail")) || zhStructures) {
+      return "relevant_structures";
+    }
+    if (t.includes("interpretation") || title.includes("解读")) return "interpretation_hints";
+    if (t.includes("follow") || title.includes("推荐追问")) return "suggested_questions";
     return null;
   };
 
@@ -289,12 +295,17 @@ export function SessionQueryChat({
           let raw = "";
           while (true) {
             const { done, value } = await reader.read();
-            if (done) break;
-            raw += decoder.decode(value, { stream: true });
+            if (value) {
+              raw += decoder.decode(value, { stream: true });
+            }
             const { events, rest } = parseSseBuffer(raw);
             raw = rest;
             applyStreamEvents(events);
+            if (done) break;
           }
+          // Flush UTF-8 decoder; without this, a multibyte char split across chunks can drop the tail
+          // (including the final SSE `complete` frame) — more common on real networks than on localhost.
+          raw += decoder.decode(new Uint8Array(), { stream: false });
           const flushed = parseSseBuffer(raw);
           applyStreamEvents(flushed.events);
           const trailing = parseSseTrailing(flushed.rest);
@@ -733,7 +744,7 @@ function MessageBubble({
                           <li key={bi} className="flex items-start gap-2 text-sm text-stone-700">
                             <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-stone-400" />
                             <span>
-                              {b}
+                              {renderInlineMd(b)}
                               {isActive && isLast && (
                                 <span
                                   className="ml-0.5 inline-block h-3 w-0.5 translate-y-0.5 animate-pulse bg-stone-500/60 align-baseline"
@@ -773,7 +784,7 @@ function MessageBubble({
                             className={`mt-2 h-1 w-1 shrink-0 rounded-full ${sec.key === "interpretation_hints" ? "bg-amber-400" : "bg-stone-400"}`}
                           />
                           <span>
-                            {b}
+                            {renderInlineMd(b)}
                             {isActive && isLast && (
                               <span
                                 className="ml-0.5 inline-block h-3 w-0.5 translate-y-0.5 animate-pulse bg-amber-600/60 align-baseline"
@@ -837,7 +848,7 @@ function MessageBubble({
               {response.interpretation_hints!.map((s) => (
                 <li key={s} className="flex items-start gap-2 text-sm text-stone-700">
                   <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-amber-400" />
-                  {s}
+                  {renderInlineMd(s)}
                 </li>
               ))}
             </ul>
@@ -851,7 +862,7 @@ function MessageBubble({
               {response.suggested_questions!.map((q) => (
                 <li key={q} className="flex items-start gap-2 text-sm text-stone-700">
                   <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-stone-400" />
-                  {q}
+                  {renderInlineMd(q)}
                 </li>
               ))}
             </ul>

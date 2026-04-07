@@ -43,7 +43,7 @@ export function ChartHeaderGlyphs({
   const pairGap = dense ? "gap-x-0.5" : "gap-x-1";
   const rowClass = dense
     ? "inline-flex min-w-0 shrink-0 flex-nowrap items-center gap-x-1.5 text-stone-600"
-    : "inline-flex min-w-0 shrink-0 flex-wrap items-center gap-x-2.5 gap-y-1 text-stone-600";
+    : "inline-flex min-w-0 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 text-stone-600";
 
   return (
     <span className={rowClass} aria-label={t("header.sunMoonAsc")}>
