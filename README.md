@@ -36,6 +36,18 @@ uvicorn app.main:app --reload --port 8000
 
 `app.main` persists sessions with **`supabase_store`**. **`local_json`** is only for test fixtures; use Supabase in day-to-day dev to match production.
 
+**Phone / same-LAN testing (e.g. Next at `http://10.27.39.196:3000`):**
+
+1. **Bind the API on all interfaces** — default `uvicorn` only listens on `127.0.0.1`, so `10.27.39.196:8000` gets `ERR_CONNECTION_REFUSED` from another device:
+
+   ```bash
+   uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+   ```
+
+2. **CORS** — in `services/api/.env`, set `CORS_ORIGINS` to include your web origin (comma-separated), e.g. `http://10.27.39.196:3000`. The API already allows `http://localhost:3000` and `http://127.0.0.1:3000` by default; LAN IPs are not.
+
+3. **Frontend** — `apps/web/.env.local` should have `NEXT_PUBLIC_API_URL=http://10.27.39.196:8000` (same host the browser uses to open the app) so session fetches hit your machine, not `localhost` (which would mean “the phone itself,” not your dev PC).
+
 ### 2. Web (`apps/web`)
 
 ```bash

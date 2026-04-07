@@ -205,6 +205,12 @@ function findMatchingAspect(chartAspects: NatalAspect[], line: string): NatalAsp
   );
 }
 
+function houseShortLabel(n: number, locale: string): string {
+  if (locale === "zh") return `第${n}宫`;
+  const suffix = n === 1 ? "ST" : n === 2 ? "ND" : n === 3 ? "RD" : "TH";
+  return `${n}${suffix}`;
+}
+
 function parseStellium(line: string): { signRaw: string; count: string; planets: string } | null {
   const m = /^(.+?)\s+stellium\s+\((\d+)\s+planets?:\s*(.+)\)/i.exec(line);
   if (!m) return null;
@@ -311,7 +317,7 @@ export function ChartFeaturesGrid({
   features: Features;
   chartAspects?: NatalAspect[];
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [morePlanets, setMorePlanets] = useState(false);
   const [moreAspects, setMoreAspects] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -538,12 +544,12 @@ export function ChartFeaturesGrid({
       {floating}
 
       {/* Stelliums */}
-      <div className={`${cardShellCompact} relative`}>
+      <div className={`${cardShellCompact} relative flex flex-col`}>
         <AccentWash variant="stellium" />
         <h3 className="text-sm font-semibold leading-tight tracking-tight text-stone-900">{t("features.stelliums")}</h3>
         {f.stelliums.length > 0 ? (
           <>
-            <div className="mt-1 flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
+            <div className="mt-1 flex flex-1 flex-wrap items-center justify-center gap-x-2 gap-y-1">
               {(moreStelliums ? f.stelliums : f.stelliums.slice(0, 3)).map((line, idx) => {
                 const sp = parseStellium(line);
                 return (
@@ -625,7 +631,7 @@ export function ChartFeaturesGrid({
                         setHouseTip((prev) => (prev?.n === n ? null : { n, left, top }));
                       }}
                     >
-                      <p className="text-[11px] font-semibold text-violet-950">{t(`house.${n}.title`)}</p>
+                      <p className="text-[11px] font-semibold text-violet-950">{houseShortLabel(n, locale)}</p>
                     </button>
                   );
                 })}
@@ -655,7 +661,7 @@ export function ChartFeaturesGrid({
                               setHouseTip((prev) => (prev?.n === n ? null : { n, left, top }));
                             }}
                           >
-                            <p className="text-[11px] font-semibold text-violet-950">{t(`house.${n}.title`)}</p>
+                            <p className="text-[11px] font-semibold text-violet-950">{houseShortLabel(n, locale)}</p>
                           </button>
                         );
                       })}

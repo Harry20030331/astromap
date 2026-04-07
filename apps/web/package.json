@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "dev:mobile": "next dev --hostname 0.0.0.0",
+    "dev:mobile": "next build && next start --hostname 0.0.0.0",
+    "dev:mobile:hot": "next dev --hostname 0.0.0.0",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"

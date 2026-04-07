@@ -28,6 +28,16 @@ const LABEL_KEYS: Record<string, string> = {
   mutable: "ring.mutable",
 };
 
+const DESC_KEYS: Record<string, string> = {
+  fire: "ring.fire.desc",
+  earth: "ring.earth.desc",
+  air: "ring.air.desc",
+  water: "ring.water.desc",
+  cardinal: "ring.cardinal.desc",
+  fixed: "ring.fixed.desc",
+  mutable: "ring.mutable.desc",
+};
+
 type RingKind = "elements" | "modalities";
 
 type LegendSelection = { ring: RingKind; key: string };
@@ -190,7 +200,7 @@ function DonutRing({
 
   return (
     <div className="flex min-w-0 flex-col items-center">
-      <h3 className="mb-0.5 text-center text-base font-semibold tracking-tight text-stone-900">
+      <h3 className="mb-0.5 text-center text-lg font-semibold tracking-tight text-stone-900">
         {title}
       </h3>
       <svg
@@ -245,10 +255,20 @@ function DonutRing({
         {segments.map((seg) => {
           const pct = total > 0 ? Math.round((seg.value / total) * 100) : 0;
           const en = LABEL_KEYS[seg.key] ? tFn(LABEL_KEYS[seg.key]) : seg.key;
+          const desc = DESC_KEYS[seg.key] ? tFn(DESC_KEYS[seg.key]) : undefined;
           const isOpen = selection?.ring === ring && selection.key === seg.key;
+          // Determine vertical position: bottom row shows tooltip above
           const tipBelow =
             (ring === "elements" && (seg.key === "air" || seg.key === "water")) ||
             (ring === "modalities" && seg.key === "mutable");
+          // Left column items align tooltip to their left edge to avoid viewport overflow;
+          // right column items stay centered (the original default).
+          const isLeftCol =
+            (ring === "elements" && (seg.key === "fire" || seg.key === "air")) ||
+            (ring === "modalities" && (seg.key === "cardinal" || seg.key === "mutable"));
+          const tipHAlign = isLeftCol
+            ? "left-0 translate-x-0"
+            : "left-1/2 -translate-x-1/2";
 
           return (
             <li key={seg.key} className="relative min-w-0">
@@ -274,13 +294,18 @@ function DonutRing({
                     <div
                       id={`legend-tip-${ring}-${seg.key}`}
                       role="tooltip"
-                      className={`pointer-events-none absolute left-1/2 z-30 w-max max-w-[min(14rem,calc(100vw-2rem))] -translate-x-1/2 rounded-md border border-stone-200/90 bg-[var(--surface)] px-2.5 py-1.5 text-center text-xs font-medium leading-snug text-stone-900 shadow-lg shadow-stone-300/35 ${tipBelow ? "top-full mt-1.5" : "bottom-full mb-1.5"}`}
+                      className={`pointer-events-none absolute z-30 w-max max-w-[min(14rem,calc(100vw-2rem))] rounded-md border border-stone-200/90 bg-[var(--surface)] px-2.5 py-1.5 text-center text-sm font-medium leading-snug text-stone-900 shadow-lg shadow-stone-300/35 ${tipHAlign} ${tipBelow ? "top-full mt-1.5" : "bottom-full mb-1.5"}`}
                     >
                       {en}
+                      {desc ? (
+                        <span className="mt-0.5 block text-xs font-normal text-stone-500">
+                          {desc}
+                        </span>
+                      ) : null}
                     </div>
                   ) : null}
                 </div>
-                <span className="text-sm font-semibold tabular-nums text-stone-800">
+                <span className="text-base font-semibold tabular-nums text-stone-800">
                   {pct}%
                 </span>
                 <span className="sr-only">

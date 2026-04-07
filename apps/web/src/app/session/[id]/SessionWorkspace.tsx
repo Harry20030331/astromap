@@ -2,78 +2,41 @@
 
 import Link from "next/link";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useParams, usePathname, useRouter } from "next/navigation";
+import { SessionView } from "@/components/session/SessionView";
 import { SessionQueryChat } from "@/components/session/SessionQueryChat";
 import { LocaleToggle } from "@/components/LocaleToggle";
 import { useI18n } from "@/lib/i18n";
 
-export default function SessionWorkspace({ children }: { children: React.ReactNode }) {
+// children is passed by Next.js layout but not rendered here —
+// both panels are always in the DOM so swipe gestures work seamlessly.
+export default function SessionWorkspace({ children: _children }: { children: React.ReactNode }) {
   const { t } = useI18n();
   const params = useParams();
   const id = params.id as string;
   const pathname = usePathname();
   const router = useRouter();
-  const searchParams = useSearchParams();
 
-  const [queryOpen, setQueryOpen] = useState(
-    () => searchParams.get("query") === "1" || Boolean(pathname?.replace(/\/$/, "").endsWith("/query")),
-  );
+  // Derive active panel from URL — single source of truth, never out-of-sync.
+  const queryOpen = Boolean(pathname?.replace(/\/$/, "").endsWith("/query"));
 
-  // Keep URL in sync (fire-and-forget, does not drive UI — skip initial mount)
-  const skipUrlSync = useRef(true);
-  useEffect(() => {
-    if (skipUrlSync.current) {
-      skipUrlSync.current = false;
-      return;
-    }
-    const base = `/session/${id}/view`;
-    router.replace(queryOpen ? `${base}?query=1` : base, { scroll: false });
-  }, [queryOpen, id, router]);
-
+  // SessionQueryChat reads localStorage in its useState initializer, which causes a
+  // hydration mismatch (server has no localStorage, client does). Guard it with mounted
+  // so it is never SSR-ed — the panel div itself still exists for swipe gestures.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
   const trackRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
-  // Ref mirror of queryOpen — gesture handlers always read fresh value
+  // Keep a ref that gesture handlers (created once) can always read fresh values from.
   const queryOpenRef = useRef(queryOpen);
   useEffect(() => {
     queryOpenRef.current = queryOpen;
   });
 
-  // Tracks whether initial position has been set
-  const initializedRef = useRef(false);
-
-  // Track: [View (left)] [Query (right)]
-  //   View  (queryOpen=false) → translateX(0)
-  //   Query (queryOpen=true)  → translateX(-w)
-  // Swipe right-to-left (dx < 0) moves from View into Query
-  const pos = (w: number) => (queryOpen ? -w : 0);
-
-  // Set initial position BEFORE first paint (no flash, no transition)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useLayoutEffect(() => {
-    const el = trackRef.current;
-    const wrapper = wrapperRef.current;
-    if (!el || !wrapper) return;
-    el.style.transition = "none";
-    el.style.transform = `translateX(${pos(wrapper.offsetWidth)}px)`;
-    initializedRef.current = true;
-  }, []);
-
-  // Animate to correct position on tab click (skip the initial run)
-  useEffect(() => {
-    if (!initializedRef.current) return;
-    const el = trackRef.current;
-    const wrapper = wrapperRef.current;
-    if (!el || !wrapper) return;
-    const w = wrapper.offsetWidth;
-    el.style.transition = "transform 0.35s cubic-bezier(0.25, 1, 0.5, 1)";
-    el.style.transform = `translateX(${pos(w)}px)`;
-  }, [queryOpen]);
-
-  // Gesture handler — runs once, reads queryOpenRef for always-fresh state
+  // Swipe gesture: only View→Query (swipe left) and Query→View (swipe right) are allowed.
+  // The opposite directions rubber-band to signal the boundary.
   useEffect(() => {
     const wrapper = wrapperRef.current;
     const track = trackRef.current;
@@ -109,13 +72,13 @@ export default function SessionWorkspace({ children }: { children: React.ReactNo
       const w = wrapper.offsetWidth;
       const open = queryOpenRef.current;
 
-      // open=false (View at 0): dx>0 rubber-band; dx<0 drags toward Query
-      // open=true (Query at -w): dx<0 rubber-band; dx>0 drags back toward View
+      // View (open=false): block rightward swipe (dx>0), allow leftward (dx<0)
+      // Query (open=true): block leftward swipe (dx<0), allow rightward (dx>0)
       let raw: number;
       if (!open && dx > 0) {
-        raw = dx * 0.15;
+        raw = dx * 0.12; // rubber-band — can't swipe right on View
       } else if (open && dx < 0) {
-        raw = -w + dx * 0.15;
+        raw = -w + dx * 0.12; // rubber-band — can't swipe left on Query
       } else {
         raw = Math.max(-w, Math.min(0, (open ? -w : 0) + dx));
       }
@@ -137,14 +100,15 @@ export default function SessionWorkspace({ children }: { children: React.ReactNo
       track.style.transition = "transform 0.35s cubic-bezier(0.25, 1, 0.5, 1)";
 
       if (!open && dx < -threshold) {
-        // View → swipe right-to-left → Query
+        // View → swipe left → Query
         track.style.transform = `translateX(${-w}px)`;
-        setQueryOpen(true);
+        router.push(`/session/${id}/query`);
       } else if (open && dx > threshold) {
-        // Query → swipe left-to-right → View
+        // Query → swipe right → View
         track.style.transform = `translateX(0px)`;
-        setQueryOpen(false);
+        router.push(`/session/${id}/view`);
       } else {
+        // Not far enough — snap back
         track.style.transform = `translateX(${open ? -w : 0}px)`;
       }
     };
@@ -159,6 +123,43 @@ export default function SessionWorkspace({ children }: { children: React.ReactNo
       wrapper.removeEventListener("touchend", onTouchEnd);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, router]);
+
+  // Keep the swipe track aligned with the URL. Touch handlers write transform in px; React
+  // previously mixed in translateX(-100vw), which can diverge from the wrapper width. Without
+  // a layout sync, route/tab can say "view" while the track is still offset to the query panel
+  // (e.g. after gesture + navigation edge cases or bf-cache restore).
+  useLayoutEffect(() => {
+    const track = trackRef.current;
+    const wrapper = wrapperRef.current;
+    if (!track || !wrapper) return;
+
+    const apply = () => {
+      const w = wrapper.offsetWidth;
+      if (!w) return;
+      track.style.transition = "";
+      track.style.transform = queryOpen ? `translateX(${-w}px)` : "translateX(0)";
+    };
+
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(wrapper);
+    return () => ro.disconnect();
+  }, [queryOpen]);
+
+  useEffect(() => {
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (!e.persisted) return;
+      const track = trackRef.current;
+      const wrapper = wrapperRef.current;
+      if (!track || !wrapper) return;
+      const w = wrapper.offsetWidth;
+      if (!w) return;
+      track.style.transition = "";
+      track.style.transform = queryOpenRef.current ? `translateX(${-w}px)` : "translateX(0)";
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
   }, []);
 
   const tabBase =
@@ -206,7 +207,7 @@ export default function SessionWorkspace({ children }: { children: React.ReactNo
               role="tab"
               aria-selected={!queryOpen}
               className={`${tabBase} ${!queryOpen ? tabActive : tabInactive} inline-flex items-center justify-center gap-1.5`}
-              onClick={() => setQueryOpen(false)}
+              onClick={() => router.push(`/session/${id}/view`)}
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -230,7 +231,7 @@ export default function SessionWorkspace({ children }: { children: React.ReactNo
               role="tab"
               aria-selected={queryOpen}
               className={`${tabBase} ${queryOpen ? tabActive : tabInactive} inline-flex items-center justify-center gap-1.5`}
-              onClick={() => setQueryOpen(true)}
+              onClick={() => router.push(`/session/${id}/query`)}
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -252,19 +253,23 @@ export default function SessionWorkspace({ children }: { children: React.ReactNo
         </div>
       </header>
 
-      {/* Swipe viewport */}
-      <div ref={wrapperRef} className="relative min-h-0 flex-1" style={{ overflow: "hidden" }}>
+      {/* Swipe viewport — both panels always in DOM */}
+      <div ref={wrapperRef} className="relative min-h-0 flex-1 overflow-hidden">
         <div
           ref={trackRef}
-          style={{ display: "flex", height: "100%", willChange: "transform" }}
+          style={{
+            display: "flex",
+            height: "100%",
+            willChange: "transform",
+          }}
         >
-          {/* Panel 0 – View (left, visible at translateX(0)) */}
+          {/* Panel 0 – View (left) */}
           <div style={{ flex: "0 0 100vw", height: "100%", overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain" }}>
-            {children}
+            <SessionView sessionId={id} />
           </div>
-          {/* Panel 1 – Query (right, visible at translateX(-w)) */}
+          {/* Panel 1 – Query (right) */}
           <div style={{ flex: "0 0 100vw", height: "100%", display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden" }}>
-            {mounted && <SessionQueryChat sessionId={id} />}
+            {mounted && <SessionQueryChat sessionId={id} queryPanelActive={queryOpen} />}
           </div>
         </div>
       </div>

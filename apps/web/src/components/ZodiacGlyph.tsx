@@ -1,8 +1,12 @@
+"use client";
+
 /**
  * Zodiac paths from Material Design Icons (Pictogrammers), Apache-2.0 license.
  * https://pictogrammers.com/library/mdi/ — cleaner than default Unicode zodiac glyphs across OS fonts.
  */
+import { useEffect, useRef, useState } from "react";
 import { signAbbrev, zodiacSlot } from "@/lib/chartSign";
+import { useI18n } from "@/lib/i18n";
 
 /** Order: Aries … Pisces (matches chartSign zodiac slot index). */
 const ZODIAC_MDI_PATHS: readonly string[] = [
@@ -20,21 +24,90 @@ const ZODIAC_MDI_PATHS: readonly string[] = [
   "M20,11H18C18.11,8.19 18.73,5.42 19.81,2.82L18,2.06C16.81,4.9 16.13,7.92 16,11H8C7.87,7.92 7.19,4.9 6,2.06L4.14,2.82C5.24,5.41 5.87,8.18 6,11H4V13H6C5.89,15.81 5.27,18.58 4.19,21.18L6,21.94C7.19,19.1 7.87,16.08 8,13H16C16.13,16.08 16.81,19.1 18,21.94L19.86,21.18C18.76,18.59 18.13,15.82 18,13H20V11Z",
 ];
 
-export function ZodiacGlyph({ sign, className = "" }: { sign: string; className?: string }) {
+const GLYPH_BOX = {
+  md: "h-[1.48rem] w-[1.48rem]",
+  sm: "h-[0.98rem] w-[0.98rem]",
+} as const;
+
+export function ZodiacGlyph({
+  sign,
+  className = "",
+  size = "md",
+}: {
+  sign: string;
+  className?: string;
+  /** `sm` aligns with `text-sm` labels (e.g. session list). */
+  size?: keyof typeof GLYPH_BOX;
+}) {
   const i = zodiacSlot(sign);
   if (i < 0) {
     return (
-      <span className={`text-sm font-medium tabular-nums ${className}`.trim()}>{signAbbrev(sign)}</span>
+      <span
+        className={`font-medium tabular-nums ${size === "sm" ? "text-sm" : "text-base"} ${className}`.trim()}
+      >
+        {signAbbrev(sign)}
+      </span>
     );
   }
   const d = ZODIAC_MDI_PATHS[i];
   return (
     <svg
       viewBox="0 0 24 24"
-      className={`inline-block h-[1.35rem] w-[1.35rem] shrink-0 ${className}`.trim()}
+      className={`inline-block shrink-0 ${GLYPH_BOX[size]} ${className}`.trim()}
       aria-hidden
     >
       <path fill="currentColor" d={d} />
     </svg>
+  );
+}
+
+/** Clickable zodiac icon: shows localized sign name in a small popover; `title` also set for hover. */
+export function ZodiacGlyphWithLocalizedName({
+  sign,
+  className = "",
+  size = "md",
+}: {
+  sign: string;
+  className?: string;
+  size?: keyof typeof GLYPH_BOX;
+}) {
+  const { t } = useI18n();
+  const i = zodiacSlot(sign);
+  const label = i >= 0 ? t(`zodiac.${i}`) : signAbbrev(sign);
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [open]);
+
+  return (
+    <span ref={rootRef} className="relative inline-flex align-middle">
+      <button
+        type="button"
+        className={`inline-flex cursor-pointer border-0 bg-transparent p-0 align-middle leading-none text-inherit ${className}`.trim()}
+        title={label}
+        aria-label={label}
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <ZodiacGlyph sign={sign} className={className} size={size} />
+      </button>
+      {open ? (
+        <span
+          className="pointer-events-none absolute left-1/2 top-full z-[60] mt-1 -translate-x-1/2 whitespace-nowrap rounded-md border border-stone-200 bg-white px-2 py-1 text-xs font-medium text-stone-800 shadow-md"
+          role="tooltip"
+        >
+          {label}
+        </span>
+      ) : null}
+    </span>
   );
 }

@@ -10,12 +10,20 @@ import {
 } from "@/components/BirthPlacePicker";
 import { LogoStar } from "@/components/LogoStar";
 import { LocaleToggle } from "@/components/LocaleToggle";
+import { ChartHeaderGlyphs } from "@/components/ChartHeaderGlyphs";
 import { LandingPage } from "@/components/LandingPage";
 import { apiDelete, apiGet, apiPost } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/app/providers";
 
-type SessionSummary = { id: string; label: string; created_at: string | null };
+type SessionSummary = {
+  id: string;
+  label: string;
+  created_at: string | null;
+  sun_sign?: string | null;
+  moon_sign?: string | null;
+  asc_sign?: string | null;
+};
 
 type SessionBirth = {
   label?: string | null;
@@ -96,13 +104,14 @@ export default function HomePage() {
     lng: -0.1278,
     tzStr: "Europe/London",
   });
-  const [placeCommitted, setPlaceCommitted] = useState(true);
+  const [placeCommitted, setPlaceCommitted] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [editErr, setEditErr] = useState<string | null>(null);
   const [birthPlaceSyncSeq, setBirthPlaceSyncSeq] = useState(0);
   const birthFormRef = useRef<HTMLElement>(null);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const sessionsDrawerRef = useRef<HTMLElement>(null);
 
   const [pendingDelete, setPendingDelete] = useState<SessionSummary | null>(null);
   const [deleteErr, setDeleteErr] = useState<string | null>(null);
@@ -121,6 +130,14 @@ export default function HomePage() {
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
+  }, [drawerOpen]);
+
+  useEffect(() => {
+    if (drawerOpen) return;
+    const ae = document.activeElement;
+    if (ae instanceof HTMLElement && sessionsDrawerRef.current?.contains(ae)) {
+      ae.blur();
+    }
   }, [drawerOpen]);
 
   const createMut = useMutation({
@@ -195,20 +212,12 @@ export default function HomePage() {
   const sessionLabel = (s: SessionSummary) =>
     s.label?.trim() ? s.label : t("home.unnamedSession");
 
-  if (authLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-950">
-        <p className="text-slate-400 text-sm">Loading…</p>
-      </div>
-    );
-  }
-
-  if (!session) {
+  if (authLoading || !session) {
     return <LandingPage onSignIn={signInWithGoogle} />;
   }
 
   return (
-    <main className="mx-auto flex min-h-full w-full max-w-lg flex-col gap-12 px-4 pb-10 pt-20">
+    <main className="mx-auto flex min-h-full w-full max-w-lg flex-col gap-12 px-4 pb-10 pt-[20pt]">
       {pendingDelete ? (
         <div
           className="fixed inset-0 z-[200] flex items-center justify-center p-4"
@@ -362,23 +371,22 @@ export default function HomePage() {
       </header>
 
       {/* ── History drawer ── */}
+      {/* Backdrop — decorative overlay, always aria-hidden */}
       <div
+        aria-hidden="true"
         className={`fixed inset-0 z-[100] transition-colors duration-300 ${drawerOpen ? "pointer-events-auto bg-stone-900/30 backdrop-blur-[2px]" : "pointer-events-none bg-transparent"}`}
+        onClick={() => setDrawerOpen(false)}
+      />
+      {/* Drawer panel — separate from backdrop so aria-hidden never traps a focused child */}
+      <aside
+        ref={sessionsDrawerRef}
+        className={`fixed right-0 top-0 z-[101] flex h-full w-full max-w-xs flex-col border-l border-stone-200/80 bg-[var(--surface)] shadow-2xl shadow-stone-400/20 transition-transform duration-300 ease-[cubic-bezier(.32,.72,0,1)] ${drawerOpen ? "translate-x-0" : "translate-x-full"}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label={t("home.pastSessions")}
         aria-hidden={!drawerOpen}
+        inert={!drawerOpen ? true : undefined}
       >
-        <button
-          type="button"
-          className="absolute inset-0"
-          tabIndex={-1}
-          aria-label={t("home.cancel")}
-          onClick={() => setDrawerOpen(false)}
-        />
-        <aside
-          className={`absolute right-0 top-0 flex h-full w-full max-w-xs flex-col border-l border-stone-200/80 bg-[var(--surface)] shadow-2xl shadow-stone-400/20 transition-transform duration-300 ease-[cubic-bezier(.32,.72,0,1)] ${drawerOpen ? "translate-x-0" : "translate-x-full"}`}
-          role="dialog"
-          aria-modal="true"
-          aria-label={t("home.pastSessions")}
-        >
           <div className="flex items-center justify-between border-b border-stone-100 px-4 py-3">
             <h2 className="text-sm font-semibold tracking-tight text-stone-900">
               {t("home.pastSessions")}
@@ -420,7 +428,19 @@ export default function HomePage() {
                       className="min-w-0 flex-1 px-4 py-2.5 text-sm font-medium text-stone-900 transition-colors hover:bg-stone-50"
                       onClick={() => setDrawerOpen(false)}
                     >
-                      <span className="block truncate">{sessionLabel(s)}</span>
+                      <span className="flex min-w-0 flex-nowrap items-center gap-x-0.5">
+                        <span className="min-w-0 flex-1 truncate">{sessionLabel(s)}</span>
+                        <span className="shrink-0">
+                          <ChartHeaderGlyphs
+                            variant="inlineDense"
+                            bigThreeSigns={{
+                              sun: s.sun_sign,
+                              moon: s.moon_sign,
+                              asc: s.asc_sign,
+                            }}
+                          />
+                        </span>
+                      </span>
                     </Link>
                     <button
                       type="button"
@@ -454,8 +474,7 @@ export default function HomePage() {
               </ul>
             )}
           </div>
-        </aside>
-      </div>
+      </aside>
 
       {/* ── Tagline ── */}
       <section className="relative flex flex-col items-center overflow-hidden py-3">
@@ -545,8 +564,12 @@ export default function HomePage() {
           className="mt-3 flex flex-col gap-3"
           onSubmit={(e) => {
             e.preventDefault();
-            if (!placeCommitted) {
-              setErr(t("home.selectPlace"));
+            if (!name.trim()) {
+              setErr(t("home.nameRequired"));
+              return;
+            }
+            if (!placeCommitted || !place.lat || !place.lng) {
+              setErr(t("home.birthPlaceRequired"));
               return;
             }
             createMut.mutate();
@@ -562,21 +585,80 @@ export default function HomePage() {
           </label>
           <label className="block text-xs text-stone-500">
             {t("home.date")}
-            <input
-              type="date"
-              className="mt-1 w-full rounded-md border border-stone-200 bg-[var(--surface)] px-3 py-2 text-sm text-stone-900 shadow-inner shadow-stone-100/80"
-              value={birthDate}
-              onChange={(e) => setBirthDate(e.target.value)}
-            />
+            {(() => {
+              const [bYear, bMonth, bDay] = birthDate.split("-").map(Number) as [number, number, number];
+              const selectCls = "rounded-md border border-stone-200 bg-[var(--surface)] px-2 py-2 text-sm text-stone-900 shadow-inner shadow-stone-100/80";
+              return (
+                <div className="mt-1 flex gap-2">
+                  <select
+                    className={`${selectCls} flex-[2]`}
+                    value={bYear}
+                    onChange={(e) =>
+                      setBirthDate(`${e.target.value}-${String(bMonth).padStart(2, "0")}-${String(bDay).padStart(2, "0")}`)
+                    }
+                  >
+                    {Array.from({ length: 125 }, (_, i) => 1900 + i).map((y) => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+                  <select
+                    className={`${selectCls} flex-1`}
+                    value={bMonth}
+                    onChange={(e) =>
+                      setBirthDate(`${bYear}-${String(+e.target.value).padStart(2, "0")}-${String(bDay).padStart(2, "0")}`)
+                    }
+                  >
+                    {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                      <option key={m} value={m}>{String(m).padStart(2, "0")}</option>
+                    ))}
+                  </select>
+                  <select
+                    className={`${selectCls} flex-1`}
+                    value={bDay}
+                    onChange={(e) =>
+                      setBirthDate(`${bYear}-${String(bMonth).padStart(2, "0")}-${String(+e.target.value).padStart(2, "0")}`)
+                    }
+                  >
+                    {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
+                      <option key={d} value={d}>{String(d).padStart(2, "0")}</option>
+                    ))}
+                  </select>
+                </div>
+              );
+            })()}
           </label>
           <label className="block text-xs text-stone-500">
             {t("home.timeLocal")}
-            <input
-              type="time"
-              className="mt-1 w-full rounded-md border border-stone-200 bg-[var(--surface)] px-3 py-2 text-sm text-stone-900 shadow-inner shadow-stone-100/80"
-              value={birthTime}
-              onChange={(e) => setBirthTime(e.target.value)}
-            />
+            {(() => {
+              const [bHour, bMin] = birthTime.split(":").map(Number) as [number, number];
+              const selectCls = "rounded-md border border-stone-200 bg-[var(--surface)] px-2 py-2 text-sm text-stone-900 shadow-inner shadow-stone-100/80";
+              return (
+                <div className="mt-1 flex gap-2">
+                  <select
+                    className={`${selectCls} flex-1`}
+                    value={bHour}
+                    onChange={(e) =>
+                      setBirthTime(`${String(+e.target.value).padStart(2, "0")}:${String(bMin).padStart(2, "0")}`)
+                    }
+                  >
+                    {Array.from({ length: 24 }, (_, i) => i).map((h) => (
+                      <option key={h} value={h}>{String(h).padStart(2, "0")}</option>
+                    ))}
+                  </select>
+                  <select
+                    className={`${selectCls} flex-1`}
+                    value={bMin}
+                    onChange={(e) =>
+                      setBirthTime(`${String(bHour).padStart(2, "0")}:${String(+e.target.value).padStart(2, "0")}`)
+                    }
+                  >
+                    {Array.from({ length: 60 }, (_, i) => i).map((m) => (
+                      <option key={m} value={m}>{String(m).padStart(2, "0")}</option>
+                    ))}
+                  </select>
+                </div>
+              );
+            })()}
           </label>
           <BirthPlacePicker
             key={birthPlaceSyncSeq}

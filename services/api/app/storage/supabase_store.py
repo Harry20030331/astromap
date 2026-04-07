@@ -12,6 +12,7 @@ from typing import Any
 from supabase import create_client, Client
 
 from app.config import SUPABASE_URL, SUPABASE_SERVICE_KEY
+from app.storage.chart_extract import big_three_signs
 
 _client: Client | None = None
 
@@ -107,7 +108,7 @@ def list_session_summaries(user_id: str) -> list[dict[str, Any]]:
     result = (
         _get_client()
         .table("sessions")
-        .select("id,label,birth,created_at")
+        .select("id,label,birth,created_at,chart")
         .eq("user_id", user_id)
         .order("created_at", desc=True)
         .execute()
@@ -116,11 +117,13 @@ def list_session_summaries(user_id: str) -> list[dict[str, Any]]:
     for row in result.data:
         birth = row.get("birth") or {}
         label = row.get("label") or birth.get("label") or birth.get("name") or "Session"
+        tri = big_three_signs(row.get("chart") if isinstance(row.get("chart"), dict) else None)
         out.append(
             {
                 "id": row["id"],
                 "label": label,
                 "created_at": row.get("created_at"),
+                **tri,
             }
         )
     return out

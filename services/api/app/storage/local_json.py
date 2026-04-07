@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from app.config import SESSIONS_DIR
+from app.storage.chart_extract import big_three_signs
 
 
 def _now_iso() -> str:
@@ -74,11 +75,13 @@ def list_session_summaries() -> list[dict[str, Any]]:
         except (json.JSONDecodeError, OSError):
             continue
         birth = data.get("birth") or {}
+        tri = big_three_signs(data.get("chart") if isinstance(data.get("chart"), dict) else None)
         out.append(
             {
                 "id": data.get("id", p.stem),
                 "label": birth.get("label") or birth.get("name") or "Session",
                 "created_at": data.get("created_at"),
+                **tri,
             }
         )
     return out

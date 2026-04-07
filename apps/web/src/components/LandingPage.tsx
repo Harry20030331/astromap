@@ -116,7 +116,7 @@ export function LandingPage({ onSignIn }: LandingPageProps) {
       {/* Hero Phase */}
       {phase === "hero" && (
         <div
-          className="relative z-10 flex min-h-screen flex-col items-center justify-center px-5 text-center sm:px-8"
+          className="relative z-10 flex min-h-screen flex-col items-center justify-start pt-[17vh] px-5 text-center sm:px-8"
           style={{
             animation: heroLeaving
               ? "hero-fade-out 0.45s cubic-bezier(.4,0,.2,1) forwards"
@@ -147,7 +147,7 @@ export function LandingPage({ onSignIn }: LandingPageProps) {
 
           {/* Main headline */}
           <h1
-            className="hero-tagline mb-6 max-w-2xl text-5xl font-light italic tracking-tight sm:text-6xl lg:text-7xl"
+            className="hero-tagline mb-6 max-w-2xl text-[2.4rem] font-light italic tracking-tight sm:text-6xl lg:text-7xl"
             style={{
               fontFamily: "Palatino, 'Palatino Linotype', Georgia, 'Book Antiqua', serif",
               animation: "hero-fade-in 0.9s 0.25s cubic-bezier(.22,1,.36,1) both",
@@ -238,7 +238,7 @@ export function LandingPage({ onSignIn }: LandingPageProps) {
       {/* Sign-in Phase */}
       {phase === "signin" && (
         <div
-          className="relative z-10 flex min-h-screen flex-col items-center justify-center px-6"
+          className="relative z-10 flex min-h-screen flex-col items-center justify-start pt-[15vh] px-6"
           style={{
             animation: signinVisible
               ? "signin-fade-in 0.45s cubic-bezier(.22,1,.36,1) both"

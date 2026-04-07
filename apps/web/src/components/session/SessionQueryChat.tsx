@@ -174,7 +174,14 @@ function uid(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
 
-export function SessionQueryChat({ sessionId }: { sessionId: string }) {
+export function SessionQueryChat({
+  sessionId,
+  queryPanelActive = true,
+}: {
+  sessionId: string;
+  /** false when the swipe panel is off-screen (user on /view). Prevents scrollIntoView from scrolling ancestors and revealing the chat column. */
+  queryPanelActive?: boolean;
+}) {
   const { t, locale } = useI18n();
   const [messages, setMessages] = useState<ChatMessage[]>(() => loadHistory(sessionId));
   const [text, setText] = useState("");
@@ -206,8 +213,9 @@ export function SessionQueryChat({ sessionId }: { sessionId: string }) {
   }, [messages, sessionId]);
 
   useEffect(() => {
+    if (!queryPanelActive) return;
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, queryPanelActive]);
 
   const [queryPending, setQueryPending] = useState(false);
   const queryPendingRef = useRef(false);

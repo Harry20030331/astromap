@@ -107,7 +107,7 @@ export function BirthPlacePicker({
       }
       const t = term.trim();
       if (t.length < MIN_LEN) {
-        onCommitmentChange?.(true);
+        onCommitmentChange?.(false);
         return;
       }
       const matchesSelection = Boolean(selectedLabel && t === selectedLabel.trim());

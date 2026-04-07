@@ -23,16 +23,24 @@ export function useSupabaseAuth(): SupabaseAuthState {
 
     let active = true;
 
+    const timeout = setTimeout(() => {
+      if (active) setLoading(false);
+    }, 5000);
+
     supabase.auth
       .getSession()
       .then(({ data }) => {
         if (active) {
+          clearTimeout(timeout);
           setSession(data.session);
           setLoading(false);
         }
       })
       .catch(() => {
-        if (active) setLoading(false);
+        if (active) {
+          clearTimeout(timeout);
+          setLoading(false);
+        }
       });
 
     const { data: listener } = supabase.auth.onAuthStateChange(
@@ -43,6 +51,7 @@ export function useSupabaseAuth(): SupabaseAuthState {
 
     return () => {
       active = false;
+      clearTimeout(timeout);
       listener.subscription.unsubscribe();
     };
   }, []);

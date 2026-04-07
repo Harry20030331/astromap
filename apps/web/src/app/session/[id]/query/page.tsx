@@ -1,8 +1,4 @@
-import { redirect } from "next/navigation";
-
-type Props = { params: Promise<{ id: string }> };
-
-export default async function SessionQueryRedirect({ params }: Props) {
-  const { id } = await params;
-  redirect(`/session/${id}/view?query=1`);
+// Content is rendered directly by SessionWorkspace (both panels always in DOM for swipe).
+export default function QueryPage() {
+  return null;
 }

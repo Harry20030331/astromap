@@ -1,5 +1,6 @@
 "use client";
 
+import { createPortal } from "react-dom";
 import { useEffect, useRef, useState } from "react";
 import type { AnalysisPreferences, AspectOrbKey } from "@/lib/chartPreferences";
 import {
@@ -186,9 +187,9 @@ export function ChartAnalysisSettingsPanel({
 
   if (!open) return null;
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-[60] flex items-end justify-center bg-black/45 p-4 sm:items-center"
+      className="fixed inset-0 z-[200] flex items-end justify-center bg-black/45 p-4 sm:items-center"
       role="presentation"
       onClick={onClose}
     >
@@ -359,6 +360,7 @@ export function ChartAnalysisSettingsPanel({
         </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
