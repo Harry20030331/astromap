@@ -16,7 +16,7 @@ services:
       - key: PYTHON_VERSION
         value: "3.11.8"
       - key: OPENAI_MODEL
-        value: gpt-4o-mini
+        value: gpt-5.4
       - key: OPENAI_WHISPER_MODEL
         value: whisper-1
       # Set in dashboard (do not commit secrets):
