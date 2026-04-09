@@ -19,20 +19,25 @@ Chart computation uses Swiss Ephemeris via **Kerykeion**. The dependency chain m
 ## Prerequisites
 
 - Node.js 20+
-- Python 3.11+ for the API (optional Conda: `services/api/environment.yml`)
+- Python 3.11+ for the API. **Recommended:** Conda via [`services/api/environment.yml`](services/api/environment.yml) — environment name **`astramap-api`**.
 
 ## Local development
 
 ### 1. API (`services/api`)
 
+**Recommended:** use the Conda env **`astramap-api`** (matches `environment.yml` and stays closest to production dependencies).
+
 ```bash
 cd services/api
-python -m venv .venv && source .venv/bin/activate   # or: conda env create -f environment.yml && conda activate astramap-api
-pip install -r requirements.txt
+conda env create -f environment.yml   # first time only; if it exists: conda activate astramap-api
+conda activate astramap-api
+pip install -r requirements.txt       # re-run when requirements.txt changes
 cp .env.example .env
 # Fill .env: OPENAI_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_KEY (required); optional GEONAMES_USERNAME, CORS_ORIGINS
 uvicorn app.main:app --reload --port 8000
 ```
+
+可选：若不用 Conda，可用 `python -m venv .venv && source .venv/bin/activate` 再执行同上 `pip` / `uvicorn`（需自行保持与 `requirements.txt` 同步）。
 
 `app.main` persists sessions with **`supabase_store`**. **`local_json`** is only for test fixtures; use Supabase in day-to-day dev to match production.
 
