@@ -13,6 +13,8 @@ const SUGGESTED_TOPICS = [
 ];
 
 type QueryResponse = {
+  response_mode?: "structured" | "direct";
+  direct_answer?: string;
   relevant_structures?: string[];
   interpretation_hints?: string[];
   suggested_questions?: string[];
@@ -197,30 +199,42 @@ export function SessionQueryPanel({ sessionId }: { sessionId: string }) {
 
       {result ? (
         <section className="space-y-4 pb-2">
-          <div className={resultCardClass}>
-            <h3 className="text-sm font-medium text-stone-900">Relevant structures</h3>
-            <ul className="mt-2 list-inside list-disc text-sm text-stone-700">
-              {(result.relevant_structures ?? []).map((s) => (
-                <li key={s}>{s}</li>
-              ))}
-            </ul>
-          </div>
-          <div className={resultCardClass}>
-            <h3 className="text-sm font-medium text-stone-900">Interpretation hints</h3>
-            <ul className="mt-2 list-inside list-disc text-sm text-stone-700">
-              {(result.interpretation_hints ?? []).map((s) => (
-                <li key={s}>{s}</li>
-              ))}
-            </ul>
-          </div>
-          <div className={resultCardClass}>
-            <h3 className="text-sm font-medium text-stone-900">Suggested follow-ups</h3>
-            <ul className="mt-2 list-inside list-disc text-sm text-stone-700">
-              {(result.suggested_questions ?? []).map((s) => (
-                <li key={s}>{s}</li>
-              ))}
-            </ul>
-          </div>
+          {(result.response_mode === "direct" || result.direct_answer) && (
+            <div className={resultCardClass}>
+              <h3 className="text-sm font-medium text-stone-900">Direct answer</h3>
+              <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-stone-700">
+                {result.direct_answer}
+              </p>
+            </div>
+          )}
+          {result.response_mode !== "direct" && (
+            <>
+              <div className={resultCardClass}>
+                <h3 className="text-sm font-medium text-stone-900">Relevant structures</h3>
+                <ul className="mt-2 list-inside list-disc text-sm text-stone-700">
+                  {(result.relevant_structures ?? []).map((s) => (
+                    <li key={s}>{s}</li>
+                  ))}
+                </ul>
+              </div>
+              <div className={resultCardClass}>
+                <h3 className="text-sm font-medium text-stone-900">Interpretation hints</h3>
+                <ul className="mt-2 list-inside list-disc text-sm text-stone-700">
+                  {(result.interpretation_hints ?? []).map((s) => (
+                    <li key={s}>{s}</li>
+                  ))}
+                </ul>
+              </div>
+              <div className={resultCardClass}>
+                <h3 className="text-sm font-medium text-stone-900">Suggested follow-ups</h3>
+                <ul className="mt-2 list-inside list-disc text-sm text-stone-700">
+                  {(result.suggested_questions ?? []).map((s) => (
+                    <li key={s}>{s}</li>
+                  ))}
+                </ul>
+              </div>
+            </>
+          )}
         </section>
       ) : null}
     </div>

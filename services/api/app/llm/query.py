@@ -3,11 +3,11 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Iterator
+from typing import Any, Iterator, Literal
 
 from openai import OpenAI
 
-from app.config import OPENAI_API_KEY, OPENAI_MODEL
+from app.config import OPENAI_API_KEY, OPENAI_MODEL, OPENAI_QUERY_ROUTER_MODEL
 
 
 QUERY_SYSTEM = """You are an assistant for professional astrologers during live readings.
@@ -73,6 +73,43 @@ Critical: Keep the four ### section title lines exactly as written above in Engl
 ### Structure details
 
 The line after each #### must repeat the exact same structure phrase as in your Chart structures bullets (those bullets are in Chinese; the #### line must match them character-for-character)."""
+
+QUERY_ROUTER_SYSTEM = """You are a strict query router for an astrology assistant.
+Classify each practitioner query into one of two modes:
+
+1) "direct"
+- The user asks about meanings/definitions/comparisons of specific astrological items.
+- The query can be answered as concise explanatory text without full chart-structure workflow.
+- Examples: "What does Mercury mean?", "Difference between Mercury and Jupiter", "What does Saturn in 7th house generally signify?"
+
+2) "structured"
+- The user wants chart-context interpretation, synthesis, guidance, or probing follow-up questions.
+- The query asks for personalized reading strategy or combines multiple chart factors.
+- Examples: "How should I read this client's relationship pattern?", "What are key tensions and what should I ask next?"
+
+Output ONLY valid JSON:
+{"response_mode":"direct"|"structured"}
+"""
+
+DIRECT_STREAM_SYSTEM = """You are an astrology assistant.
+You receive deterministic chart feature JSON and a practitioner query.
+
+Output ONLY markdown prose (no JSON, no headings, no code fences).
+Write a direct, concise answer to the specific query in 1-3 short paragraphs.
+
+Rules:
+- Do not use the structured template sections.
+- Keep it focused on the exact asked concept/question.
+- If chart facts are needed, only use plausible info from provided data.
+- Do not diagnose medical or mental health conditions.
+"""
+
+DIRECT_LANG_EN = "\n\nLanguage: Write naturally in English."
+DIRECT_LANG_ZH = "\n\nLanguage: Write naturally in Simplified Chinese (简体中文)."
+ROUTER_LANG_EN = "\n\nThe incoming query language is English."
+ROUTER_LANG_ZH = "\n\nThe incoming query language is Simplified Chinese (简体中文)."
+
+ResponseMode = Literal["direct", "structured"]
 
 
 def _normalize_locale(locale: str | None) -> str:
@@ -153,6 +190,32 @@ def parse_query_markdown(md: str) -> dict[str, Any]:
     return out
 
 
+def route_query_mode(query_text: str, *, locale: str | None = None) -> ResponseMode:
+    if not OPENAI_API_KEY:
+        raise RuntimeError("OPENAI_API_KEY is not set")
+    client = OpenAI(api_key=OPENAI_API_KEY)
+    lang = _normalize_locale(locale)
+    system = QUERY_ROUTER_SYSTEM + (ROUTER_LANG_ZH if lang == "zh" else ROUTER_LANG_EN)
+    resp = client.chat.completions.create(
+        model=OPENAI_QUERY_ROUTER_MODEL,
+        response_format={"type": "json_object"},
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": query_text},
+        ],
+        temperature=0,
+    )
+    raw = resp.choices[0].message.content or "{}"
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return "structured"
+    mode = data.get("response_mode")
+    if mode in ("direct", "structured"):
+        return mode
+    return "structured"
+
+
 def run_query(
     features: dict[str, Any],
     query_text: str,
@@ -184,7 +247,9 @@ def run_query(
         temperature=0.6,
     )
     raw = resp.choices[0].message.content or "{}"
-    return json.loads(raw)
+    parsed = json.loads(raw)
+    parsed["response_mode"] = "structured"
+    return parsed
 
 
 def run_query_stream(
@@ -217,6 +282,77 @@ def run_query_stream(
             {"role": "user", "content": user_content},
         ],
         temperature=0.6,
+        stream=True,
+    )
+    for chunk in stream:
+        choice = chunk.choices[0] if chunk.choices else None
+        if not choice or not choice.delta.content:
+            continue
+        yield choice.delta.content
+
+
+def run_direct_query(
+    features: dict[str, Any],
+    query_text: str,
+    aspects_shortlist: list[str],
+    *,
+    locale: str | None = None,
+) -> dict[str, Any]:
+    if not OPENAI_API_KEY:
+        raise RuntimeError("OPENAI_API_KEY is not set")
+    client = OpenAI(api_key=OPENAI_API_KEY)
+    payload = {
+        "features": features,
+        "major_aspects_shortlist": aspects_shortlist[:40],
+        "query": query_text,
+    }
+    user_content = json.dumps(payload, ensure_ascii=False)
+    lang = _normalize_locale(locale)
+    system = DIRECT_STREAM_SYSTEM + (DIRECT_LANG_ZH if lang == "zh" else DIRECT_LANG_EN)
+    resp = client.chat.completions.create(
+        model=OPENAI_MODEL,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user_content},
+        ],
+        temperature=0.5,
+    )
+    text = (resp.choices[0].message.content or "").strip()
+    return {
+        "response_mode": "direct",
+        "direct_answer": text,
+        "relevant_structures": [],
+        "interpretation_hints": [],
+        "suggested_questions": [],
+        "structure_details": {},
+    }
+
+
+def run_direct_query_stream(
+    features: dict[str, Any],
+    query_text: str,
+    aspects_shortlist: list[str],
+    *,
+    locale: str | None = None,
+) -> Iterator[str]:
+    if not OPENAI_API_KEY:
+        raise RuntimeError("OPENAI_API_KEY is not set")
+    client = OpenAI(api_key=OPENAI_API_KEY)
+    payload = {
+        "features": features,
+        "major_aspects_shortlist": aspects_shortlist[:40],
+        "query": query_text,
+    }
+    user_content = json.dumps(payload, ensure_ascii=False)
+    lang = _normalize_locale(locale)
+    system = DIRECT_STREAM_SYSTEM + (DIRECT_LANG_ZH if lang == "zh" else DIRECT_LANG_EN)
+    stream = client.chat.completions.create(
+        model=OPENAI_MODEL,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user_content},
+        ],
+        temperature=0.5,
         stream=True,
     )
     for chunk in stream:

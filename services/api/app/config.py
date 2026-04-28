@@ -13,6 +13,7 @@ SESSIONS_DIR = DATA_DIR / "sessions"
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.4")
+OPENAI_QUERY_ROUTER_MODEL = os.getenv("OPENAI_QUERY_ROUTER_MODEL", "gpt-4o-mini")
 OPENAI_WHISPER_MODEL = os.getenv("OPENAI_WHISPER_MODEL", "whisper-1")
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")

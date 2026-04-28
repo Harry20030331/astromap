@@ -460,9 +460,15 @@ def post_query(
     features = _compute_effective_features(rec)
     aspects_short = features.get("aspects") or []
     try:
-        response = query_llm.run_query(
-            features, body.text, aspects_short, locale=body.locale
-        )
+        mode = query_llm.route_query_mode(body.text, locale=body.locale)
+        if mode == "direct":
+            response = query_llm.run_direct_query(
+                features, body.text, aspects_short, locale=body.locale
+            )
+        else:
+            response = query_llm.run_query(
+                features, body.text, aspects_short, locale=body.locale
+            )
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e)) from e
     except Exception as e:
@@ -494,13 +500,32 @@ def post_query_stream(
     def event_generator():
         pieces: list[str] = []
         try:
-            for token in query_llm.run_query_stream(
-                features, body.text, aspects_short, locale=body.locale
-            ):
+            mode = query_llm.route_query_mode(body.text, locale=body.locale)
+            stream_iter = (
+                query_llm.run_direct_query_stream(
+                    features, body.text, aspects_short, locale=body.locale
+                )
+                if mode == "direct"
+                else query_llm.run_query_stream(
+                    features, body.text, aspects_short, locale=body.locale
+                )
+            )
+            for token in stream_iter:
                 pieces.append(token)
                 yield f"data: {json.dumps({'type': 'delta', 'content': token})}\n\n"
             md = "".join(pieces)
-            response = query_llm.parse_query_markdown(md)
+            if mode == "direct":
+                response = {
+                    "response_mode": "direct",
+                    "direct_answer": md.strip(),
+                    "relevant_structures": [],
+                    "interpretation_hints": [],
+                    "suggested_questions": [],
+                    "structure_details": {},
+                }
+            else:
+                response = query_llm.parse_query_markdown(md)
+                response["response_mode"] = "structured"
             entry = {
                 "text": body.text,
                 "response": response,

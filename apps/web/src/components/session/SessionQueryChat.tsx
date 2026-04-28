@@ -17,6 +17,8 @@ const SUGGESTION_CHIPS = [
 ];
 
 type QueryResponse = {
+  response_mode?: "structured" | "direct";
+  direct_answer?: string;
   relevant_structures?: string[];
   interpretation_hints?: string[];
   suggested_questions?: string[];
@@ -131,6 +133,10 @@ function parseStreamingMarkdown(md: string): StreamSection[] {
     // — ignore; wait for the next newline to complete it
   }
   return sections;
+}
+
+function hasStructuredMarkdown(md: string): boolean {
+  return /^###\s+/m.test(md);
 }
 
 function persistableMessages(messages: ChatMessage[]): ChatMessage[] {
@@ -698,11 +704,12 @@ function MessageBubble({
     const buf = message.streamBuffer;
     const sections = buf.length > 0 ? parseStreamingMarkdown(buf) : [];
     const hasSections = sections.length > 0;
+    const showDirectStream = buf.trim().length > 0 && !hasStructuredMarkdown(buf);
 
     return (
       <div className="flex justify-start">
         <div className="max-w-[92%] space-y-2">
-          {!hasSections ? (
+          {!hasSections && !showDirectStream ? (
             /* Initial dots while waiting for the first section header */
             <div className="rounded-2xl rounded-tl-sm border border-stone-200/80 bg-[var(--surface)] px-4 py-3 shadow-sm">
               <span className="flex gap-1 py-1" aria-hidden>
@@ -714,6 +721,16 @@ function MessageBubble({
                   />
                 ))}
               </span>
+            </div>
+          ) : showDirectStream ? (
+            <div className="rounded-2xl rounded-tl-sm border border-amber-200/70 bg-amber-50/50 px-4 py-3">
+              <p className="text-[13px] leading-relaxed text-stone-700 whitespace-pre-wrap">
+                {buf}
+                <span
+                  className="ml-0.5 inline-block h-3 w-0.5 translate-y-0.5 animate-pulse bg-amber-600/60 align-baseline"
+                  aria-hidden
+                />
+              </p>
             </div>
           ) : (
             sections.map((sec, si) => {
@@ -814,6 +831,17 @@ function MessageBubble({
 
   const { response } = message;
   if (!response) return null;
+  if (response.response_mode === "direct" || response.direct_answer) {
+    return (
+      <div className="flex justify-start">
+        <div className="max-w-[92%] rounded-2xl rounded-tl-sm border border-amber-200/70 bg-amber-50/50 px-4 py-3">
+          <p className="text-[13px] leading-relaxed text-stone-700 whitespace-pre-wrap">
+            {response.direct_answer ?? ""}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex justify-start">
