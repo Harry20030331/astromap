@@ -15,7 +15,7 @@ services:
     instance_count: 1
     instance_size_slug: apps-s-1vcpu-0.5gb
     health_check:
-      http_path: /health
+      http_path: /live
     envs:
       - key: PYTHON_VERSION
         value: "3.11.8"

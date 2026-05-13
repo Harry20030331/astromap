@@ -237,6 +237,12 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/live")
+def live() -> dict[str, str]:
+    """Liveness probe; prefer this on App Platform if public /health is intercepted by the edge."""
+    return {"status": "ok"}
+
+
 @app.get("/geo/cities")
 def geo_cities(q: str, country: str | None = None) -> dict[str, Any]:
     """Search populated places (GeoNames). Requires GEONAMES_USERNAME."""

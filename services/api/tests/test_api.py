@@ -14,6 +14,12 @@ def test_health():
     assert r.json()["status"] == "ok"
 
 
+def test_live():
+    r = client.get("/live")
+    assert r.status_code == 200
+    assert r.json()["status"] == "ok"
+
+
 def test_patch_analysis_preferences(monkeypatch):
     monkeypatch.setattr("app.main._run_themes_job", lambda sid: None)
 

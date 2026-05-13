@@ -20,9 +20,9 @@ def _get_client() -> Client:
     return _client
 
 
-def get_current_user_id(authorization: str = Header(...)) -> str:
+def get_current_user_id(authorization: str | None = Header(default=None)) -> str:
     """Extract and verify Supabase JWT; return the user's UUID (sub claim)."""
-    if not authorization.startswith("Bearer "):
+    if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing bearer token")
     token = authorization[7:]
     try:
