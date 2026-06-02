@@ -1,8 +1,12 @@
 # AstraMap
 
+<p align="center">
+  <img src="./docs/media/cover.png" alt="AstraMap cover" width="860" />
+</p>
 
-
-[Live Demo](https://www.astramap.app/)  ·  [Demo Video](https://www.astramap.app/)
+<p align="center">
+  <a href="https://www.astramap.app/">Live Demo</a> &nbsp;·&nbsp; <a href="https://www.astramap.app/">Demo Video</a>
+</p>
 
 > **A mobile-first AI workspace for astrologers.** Turn raw natal-chart complexity into structured, verifiable insights — and explore them through question-driven interpretation during a live reading.
 
@@ -36,11 +40,9 @@ A natal chart is a dense, multi-dimensional object: ~10+ bodies across 12 signs 
 
 ## Product Walkthrough
 
-
-|                           |                         |                          |
-| ------------------------- | ----------------------- | ------------------------ |
+| ![New querent screen](./docs/media/home-new-querent.png) | ![View chart screen](./docs/media/view-chart.png) | ![Query mode screen](./docs/media/query-mode.png) |
+| --- | --- | --- |
 | **Figure 1.** New querent | **Figure 2.** View mode | **Figure 3.** Query mode |
-
 
 - **Figure 1:** enter birth date, time, and place to create a chart session.
 - **Figure 2:** inspect the natal wheel, element / modality breakdown, and deterministic chart features.
@@ -50,7 +52,7 @@ A natal chart is a dense, multi-dimensional object: ~10+ bodies across 12 signs 
 
 ## Architecture & Repository Structure
 
-
+![AstraMap architecture](./docs/media/architecture.png)
 
 ```text
 aiastrology/
