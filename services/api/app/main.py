@@ -239,7 +239,7 @@ def health() -> dict[str, str]:
 
 @app.get("/live")
 def live() -> dict[str, str]:
-    """Liveness probe; prefer this on App Platform if public /health is intercepted by the edge."""
+    """Liveness probe for deployment platforms that need a lightweight check."""
     return {"status": "ok"}
 
 
