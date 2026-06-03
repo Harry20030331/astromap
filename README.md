@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <a href="https://www.astramap.app/">Live Demo</a> &nbsp;·&nbsp; <a href="https://www.astramap.app/">Demo Video</a>
+  <a href="https://www.astramap.app/">Live Site</a> &nbsp;·&nbsp; <a href="https://drive.google.com/file/d/1HB81PVAEYSFb4Mr7R_6jHLafXPKOfqko/view?usp=drive_link">Demo Video</a>
 </p>
 
 > **A mobile-first AI workspace for astrologers.** Turn raw natal-chart complexity into structured, verifiable insights — and explore them through question-driven interpretation during a live reading.

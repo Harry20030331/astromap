@@ -4,6 +4,7 @@ reference/
 # Session JSON and other local data (production uses Supabase)
 data/
 services/data/
+demo-video/
 
 # env
 .env
